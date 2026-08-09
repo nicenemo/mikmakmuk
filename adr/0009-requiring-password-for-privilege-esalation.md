@@ -15,5 +15,5 @@ We will not configure passwordless `sudo` on the target nodes. Instead, we will 
 
 ## Consequences
 
-* **Positive:** Maintains a strong security posture. Even if an SSH key is compromised, arbitrary root-level execution is blocked by the local password prompt.
+* **Positive:** Maintains a strong security posture. Even if an SSH key is compromised, arbitrary root-level execution is blocked by the local password prompt. This will stop AI agents accidentally doing unwanted actions.
 * **Negative:** Requires the operator to manually enter the `sudo` password once at the start of any playbook run (e.g., `./setup.yml`).
