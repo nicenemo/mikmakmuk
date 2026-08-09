@@ -5,7 +5,7 @@
 
 ## Context
 
-Each node in the cluster contains an NVMe SSD (1-2 TB) alongside a secondary SATA drive caddy fitted with a legacy 120 GB SATA SSD. Originally, the intent was to offload OS boot logic to the SATA SSDs and reserve high-speed NVMe storage exclusively for workloads. However, the SATA drives fail to boot cleanly, and ribbon cable reliability across the mini-PC chassis is uncertain.
+Each node in the cluster contains an NVMe SSD (1-2 TB) alongside a secondary SATA drive caddy fitted with a legacy 120 GB SATA SSD. Originally, the intent was to offload OS boot logic to the SATA SSDs and reserve high-speed NVMe storage exclusively for workloads. However, the SATA drives cannot be found, probably because of unseated ribbon cable.
 
 Additionally, removing the SATA caddy to access secondary NVMe slots introduces cooling complications on the HP EliteDesk 800 Mini G4, as the primary CPU cooling fan mounts directly to the SATA caddy assembly.
 
