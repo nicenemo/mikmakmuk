@@ -36,7 +36,7 @@ Standard enterprise server distributions (e.g., Debian, Ubuntu Server, Rocky Lin
 
 ## Decision Outcome
 
-Chosen Option: **Option 1 — CachyOS**.
+Chosen Option: **Option 1 — CachyOS**. This is a homelab, not a business!
 
 CachyOS provides pre-compiled `x86-64-v3` optimized package repositories and custom Linux kernels equipped with advanced CPU schedulers. This maximizes the IPC (instructions per cycle) and responsive power management of the Intel i5-8500/T processors.
 
