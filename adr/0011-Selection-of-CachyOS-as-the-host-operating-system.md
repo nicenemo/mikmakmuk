@@ -22,6 +22,7 @@ Standard enterprise server distributions (e.g., Debian, Ubuntu Server, Rocky Lin
 * **Up-to-Date Kernel & Driver Stack:** Direct, rolling access to the latest Linux kernels and Intel i915 / VA-API graphics drivers without manual backports.
 * **Minimal Base Overhead:** A lean baseline with minimal background daemons running prior to orchestration workloads.
 * **Automation Friendliness:** Arch-based ecosystem compatibility with `pacman` and declarative configuration via Ansible.
+* **Default BTRFS** Easy snapshotting and volumes with BTRFS which can be used both in Docker as wel as Incus. BTRFS does not have the overhead of ZFS.
 
 ---
 
