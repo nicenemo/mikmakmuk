@@ -29,7 +29,7 @@ Standard enterprise server distributions (e.g., Debian, Ubuntu Server, Rocky Lin
 
 1. **CachyOS (Arch-based performance-focused distro)**
 2. **Debian Stable / Ubuntu Server LTS**
-3. **Talos Linux / Flatcar Container Linux (Immutable/Minimal OS)**
+3. **Talos Linux / Incus OS/ Proxmox**
 
 ---
 
