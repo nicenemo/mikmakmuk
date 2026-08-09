@@ -1,0 +1,11 @@
+[Unit]
+Description=PowerTOP Auto-Tune Maintenance Service
+After=syslog.target network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/powertop --auto-tune
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

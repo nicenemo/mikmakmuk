@@ -1,0 +1,155 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Apply Base System Optimizations and Configuration
+  hosts: cluster_nodes
+  become: true
+  vars:
+    required_ssh_key_types:
+      - id_ed25519.pub
+      - id_rsa.pub
+      - id_ecdsa.pub
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. SSH Key Discovery & Deployment
+    # -------------------------------------------------------------------------
+    - name: Locate local SSH pubkeys on control machine
+      ansible.builtin.stat:
+        path: "{{ lookup('env', 'HOME') }}/.ssh/{{ item }}"
+      delegate_to: localhost
+      become: false
+      register: ssh_key_stats
+      loop: "{{ required_ssh_key_types }}"
+
+    - name: Extract first available local SSH key
+      ansible.builtin.set_fact:
+        found_ssh_key_path: >-
+          {{
+            (ssh_key_stats.results
+              | selectattr('stat.exists', 'defined')
+              | selectattr('stat.exists')
+              | map(attribute='item')
+              | list
+              | first) | default('')
+          }}
+
+    - name: Bail out if no local SSH public keys exist
+      ansible.builtin.fail:
+        msg: >-
+          CRITICAL ERROR: No valid SSH public key found in
+          {{ lookup('env', 'HOME') }}/.ssh/
+      when: found_ssh_key_path == ""
+
+    - name: Inject discovered SSH public key into authorized_keys
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user }}"
+        state: present
+        key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + found_ssh_key_path) }}"
+
+    # -------------------------------------------------------------------------
+    # 2. Package Management & Keyring Maintenance
+    # -------------------------------------------------------------------------
+    - name: Update Arch and CachyOS keyrings first
+      community.general.pacman:
+        name:
+          - archlinux-keyring
+          - cachyos-keyring
+        state: latest
+        update_cache: true
+
+    - name: Wipe pacman package cache directory
+      ansible.builtin.file:
+        path: /var/cache/pacman/pkg
+        state: absent
+
+    - name: Recreate clean pacman package cache directory
+      ansible.builtin.file:
+        path: /var/cache/pacman/pkg
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Upgrade all system packages
+      community.general.pacman:
+        update_cache: true
+        upgrade: true
+
+    - name: Install baseline hardware drivers and power management tooling
+      community.general.pacman:
+        name:
+          - intel-media-driver
+          - libva-intel-driver
+          - mesa
+          - powertop
+          - cpupower
+        state: present
+
+    - name: Install common_packages and node_packages from inventory
+      community.general.pacman:
+        name: "{{ (common_packages | default([])) + (node_packages | default([])) }}"
+        state: present
+
+    # -------------------------------------------------------------------------
+    # 3. Kernel Command Line & Hardware Tuning
+    # -------------------------------------------------------------------------
+    - name: Ensure /etc/cmdline.d directory exists
+      ansible.builtin.file:
+        path: /etc/cmdline.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure hardware kernel tuning drop-in
+      ansible.builtin.copy:
+        src: homelab-tuning.conf
+        dest: /etc/cmdline.d/homelab-tuning.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Regenerate initramfs
+
+    - name: Ensure i915 module is set to load at boot
+      ansible.builtin.copy:
+        src: igpu.conf
+        dest: /etc/modules-load.d/igpu.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Load i915 module
+      community.general.modprobe:
+        name: i915
+        state: present
+
+    # -------------------------------------------------------------------------
+    # 4. Power & Thermal Management
+    # -------------------------------------------------------------------------
+    - name: Deploy PowerTOP auto-tune systemd service unit
+      ansible.builtin.copy:
+        src: powertop.service
+        dest: /etc/systemd/system/powertop.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload systemd daemon
+
+    - name: Enable and start Powertop daemon
+      ansible.builtin.systemd:
+        name: powertop
+        enabled: true
+        state: started
+      loop:
+
+  # ---------------------------------------------------------------------------
+  # Handlers (Executed at end of play)
+  # ---------------------------------------------------------------------------
+  handlers:
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Regenerate initramfs
+      ansible.builtin.command: mkinitcpio -P
+      changed_when: true

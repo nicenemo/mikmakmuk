@@ -1,0 +1,4 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Import Base Teardown Playbook
+  ansible.builtin.import_playbook: playbooks/base-teardown.yml
