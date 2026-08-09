@@ -13,5 +13,5 @@ Remove automatic reboot tasks from `base-setup.yml` and provide a dedicated, iso
 
 ## Consequences
 
-* **Positive:** Prevents unexpected node restarts during routine configuration runs; enables single-node rolling reboots (`serial: 1`) during active maintenance windows.
+* **Positive:** Prevents unexpected node restarts during routine configuration runs; enables single-node rolling reboots during active maintenance windows.
 * **Negative:** Administrative action is required to manual invoke `reboot.yml` after changing kernel options.
