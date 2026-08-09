@@ -32,7 +32,7 @@ Design choices and hardware constraints are tracked in the [`adr/`](./adr/) dire
 * [ADR 0008: Disabling CPU Security Mitigations](./adr/0008-disabling-cpu-security-mitigations.md)
 * [ADR 0009: Requiring Password for Privilege Escalation](./adr/0009-requiring-password-for-privilege-escalation.md)
 * [ADR 0010: Removing Intel Undervolting and Thermald from Project Configuration](./adr/0010-disabling-intel-undervolting-and-thermald.md)
-* [ADR 0011: Selection of CachyOS as the Host Operating System](011-Selection-of-CachyOS-as-the-host-operating-system.md)
+* [ADR 0011: Selection of CachyOS as the Host Operating System](./adr/011-Selection-of-CachyOS-as-the-host-operating-system.md)
 ---
 
 ## Quickstart & Execution
