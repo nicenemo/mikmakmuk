@@ -31,7 +31,7 @@ Design choices and hardware constraints are tracked in the [`adr/`](./adr/) dire
 * [ADR 0007: CPU Undervolting & Microcode Lock Handling](./adr/0007-cpu-undervolting-strategy.md)
 * [ADR 0008: Disabling CPU Security Mitigations](./adr/0008-disabling-cpu-security-mitigations.md)
 * [ADR 0009: Requiring Password for Privilege Escalation](./adr/0009-requiring-password-for-privilege-escalation.md)
-
+* [ADR 0010: Removing Intel Undervolting and Thermald from Project Configuration](./adr/0010-disabling-intel-undervolting-and-thermald.md)
 ---
 
 ## Quickstart & Execution
