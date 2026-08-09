@@ -57,7 +57,7 @@ CachyOS provides pre-compiled `x86-64-v3` optimized package repositories and cus
 
 ## Pros and Cons of the Options
 
-### Debian Stable / Ubuntu Server
+### Debian Stable
 
 * **Good:** Extremely stable, predictable release cycles, widespread documentation.
 * **Bad:** Ships older kernels; missing default `x86-64-v3` compiled binaries; outdated i915 GuC/HuC firmware support out of the box; requires extra repository management overhead.
