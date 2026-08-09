@@ -61,7 +61,7 @@ CachyOS provides pre-compiled `x86-64-v3` optimized package repositories and cus
 ### Debian Stable
 
 * **Good:** Extremely stable, predictable release cycles, widespread documentation.
-* **Bad:** Ships older kernels; missing default `x86-64-v3` compiled binaries; outdated i915 GuC/HuC firmware support out of the box; requires extra repository management overhead.
+* **Bad:** Conservative, Ships older kernels; missing default `x86-64-v3` compiled binaries; possible outdated i915 GuC/HuC firmware support out of the box; requires extra repository management overhead.
 
 ### Talos Linux / IncusOS /Proxmox
 
