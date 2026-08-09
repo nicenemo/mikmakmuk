@@ -1,6 +1,6 @@
 # 7. CPU Undervolting Strategy and Microcode Lock Handling
 
-* **Status:** Accepted
+* **Status:** Outdated
 * **Date:** 2026-08-09
 
 ## Context
