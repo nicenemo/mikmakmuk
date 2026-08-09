@@ -2,7 +2,7 @@
 
 * **Status:** Accepted
 * **Date:** 2026-08-09
-* **Deciders:** Cluster Operator
+* **Deciders:** Hans Kruse
 * **Technical Story:** Choosing a performant, lightweight, and modern Linux distribution for an 8th-Gen Intel (Coffee Lake) Mini-PC cluster (`mik`, `mak`, `muk`).
 
 ---

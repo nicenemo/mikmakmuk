@@ -33,6 +33,7 @@ Design choices and hardware constraints are tracked in the [`adr/`](./adr/) dire
 * [ADR 0009: Requiring Password for Privilege Escalation](./adr/0009-requiring-password-for-privilege-escalation.md)
 * [ADR 0010: Removing Intel Undervolting and Thermald from Project Configuration](./adr/0010-disabling-intel-undervolting-and-thermald.md)
 * [ADR 0011: Selection of CachyOS as the Host Operating System](./adr/0011-Selection-of-CachyOS-as-the-host-operating-system.md)
+* [ADR 0012: Manual Boostrapping with Ventoy](./adr/0012-Manual-bootstrapping-with-Ventoy.md)
 ---
 
 ## Quickstart & Execution
