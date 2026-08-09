@@ -5,7 +5,7 @@
 
 ## Context
 
-Deploying a traditional 19-inch server rack or custom mini-rack in a home office space incurs unnecessary monetary and spatial overhead for mini-PCs.
+I already wanted a deskshelve and did not want to spend money on a server rack yet.
 
 ## Decision
 
