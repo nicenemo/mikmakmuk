@@ -1,1 +1,69 @@
+# ==========================================
+# Editor & IDE Files
+# ==========================================
+# Neovim / Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+.netrwhist
+*.un~
+Session.vim
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+
+# General OS files
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# Backups & Temporary Files
+# ==========================================
+*.bak
+*.tmp
+*.temp
+*~
+*.orig
+*.rej
+
+# ==========================================
+# Ansible
+# ==========================================
+# Credentials & Secrets (Never commit unencrypted vault files)
+*.vault
+*.vault.yml
+*.vault.yaml
+.vault_pass
+.vault_password
+
+# Ansible Local Environment & Cache
 .ansible/
+*.retry
+*.log
+.ansible-lint
+
+# Ansible Galaxy Installed Roles & Collections
+roles/external/
+roles/galaxy/
+collections/
+
+# Ansible Inventory Runtime Artifacts
+*.net_conf
+*.fact
+
+# ==========================================
+# Markdown
+# ==========================================
+# HTML/PDF generation artifacts
+*.html
+*.pdf
+
+# Tooling caches (e.g., markdownlint)
+.markdownlint-cli2-cache
