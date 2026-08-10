@@ -34,6 +34,8 @@ Design choices and hardware constraints are tracked in the [`adr/`](./adr/) dire
 * [ADR 0010: Removing Intel Undervolting and Thermald from Project Configuration](./adr/0010-disabling-intel-undervolting-and-thermald.md)
 * [ADR 0011: Selection of CachyOS as the Host Operating System](./adr/0011-Selection-of-CachyOS-as-the-host-operating-system.md)
 * [ADR 0012: Manual Boostrapping with Ventoy](./adr/0012-Manual-bootstrapping-with-Ventoy.md)
+* [ADR 0013: Renaming Hostnames to Mik, Mak, Muk](./adr/0013-Renaming-host-names-to-mik-mak-muk.md)
+* [ADR 0014: Git Branching Strategy for Service Isolation](./adr/0014-git-branching-strategy.md)
 ---
 
 ## Quickstart & Execution
