@@ -43,25 +43,26 @@ Ventoy allows maintaining a single multi-boot USB drive containing the stock Cac
 ### Bootstrap Workflow (as defined in `README.md`)
 
 1. **Bare-Metal Installation:**
-   - Boot host via Ventoy USB containing official CachyOS ISO.
-   - Run vanilla installer selecting standard options (target NVMe disk, static hostname).
+    - Boot host via Ventoy USB containing official CachyOS ISO.
+    - Run vanilla installer selecting standard options (target NVMe disk, static hostname).
 
 2. **Network Address Reservation:**
-   - Configure static DHCP reservations on the router to fix node IP assignments:
-     - `mik`: `192.168.105.2` (`mik.lab.local`)
-     - `mak`: `192.168.105.3` (`mak.lab.local`)
-     - `muk`: `192.168.105.4` (`muk.lab.local`)
+    - Configure static DHCP reservations on the router to fix node IP assignments:
+      - `mik`: `192.168.105.2` (`mik.lab.local`)
+      - `mak`: `192.168.105.3` (`mak.lab.local`)
+      - `muk`: `192.168.105.4` (`muk.lab.local`)
 
 3. **Manual Machine Bootstrap (Host Console):**
-   - Enable OpenSSH daemon and local UFW firewall access for Ansible execution:
-     ```bash
-     sudo systemctl enable --now sshd
-     sudo ufw allow 22/tcp
-     sudo ufw reload
-     ```
+    - Enable OpenSSH daemon and local UFW firewall access for Ansible execution:
+
+```bash
+sudo systemctl enable --now sshd
+sudo ufw allow 22/tcp
+sudo ufw reload
+```
 
 4. **Handoff to Control Machine:**
-   - Initiate initial setup playbook from the control machine using interactive SSH/Sudo credentials (`./setup.yml -k`).
+    - Initiate initial setup playbook from the control machine using interactive SSH/Sudo credentials (`./setup.yml -k`).
 
 ---
 

@@ -64,9 +64,9 @@ Set static DHCP reservations on your router:
 
 1. Install minimal CachyOS via Ventoy USB on each host.
 2. Set static DHCP reservations and optionally DNS a records on your router:
-   - **mik:** `192.168.105.2` (`mik.lab.local`)
-   - **mak:** `192.168.105.3` (`mak.lab.local`)
-   - **muk:** `192.168.105.4` (`muk.lab.local`)
+    - **mik:** `192.168.105.2` (`mik.lab.local`)
+    - **mak:** `192.168.105.3` (`mak.lab.local`)
+    - **muk:** `192.168.105.4` (`muk.lab.local`)
 
 ### 3. Enable SSH daemon and configure local firewall access on each node:
 
