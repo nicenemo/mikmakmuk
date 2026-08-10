@@ -1,7 +1,7 @@
 # 8. Disabling CPU Security Mitigations (Spectre/Meltdown)
 
-* **Status:** Accepted
-* **Date:** 2026-08-09
+- **Status:** Accepted
+- **Date:** 2026-08-09
 
 ## Context
 
@@ -15,5 +15,5 @@ We will pass `mitigations=off` to the kernel command line in `/etc/cmdline.d/hom
 
 ## Consequences
 
-* **Positive:** Unlocks maximum CPU and I/O performance for the i5-8500 and i5-8500T processors, recovering the 10% to 25% performance loss caused by security patches.
-* **Negative:** Leaves the nodes theoretically vulnerable to speculative execution side-channel attacks. This is an acceptable risk given the strict physical and network isolation of the homelab and the absence of untrusted multi-tenant execution.
+- **Positive:** Unlocks maximum CPU and I/O performance for the i5-8500 and i5-8500T processors, recovering the 10% to 25% performance loss caused by security patches.
+- **Negative:** Leaves the nodes theoretically vulnerable to speculative execution side-channel attacks. This is an acceptable risk given the strict physical and network isolation of the homelab and the absence of untrusted multi-tenant execution.

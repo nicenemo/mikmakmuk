@@ -1,0 +1,11 @@
+{
+  "Verbose": false,
+  "IgnoredFiles": [
+    "\\.git",
+    "\\.ansible",
+    "node_modules",
+    "\\.vault"
+  ],
+  "DisableIndentSize": false,
+  "DisableTrailingWhitespace": false
+}

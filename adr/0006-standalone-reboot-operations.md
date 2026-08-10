@@ -1,7 +1,7 @@
 # 6. Standalone Reboot Operations
 
-* **Status:** Accepted
-* **Date:** 2026-08-09
+- **Status:** Accepted
+- **Date:** 2026-08-09
 
 ## Context
 
@@ -13,5 +13,5 @@ Remove automatic reboot tasks from `base-setup.yml` and provide a dedicated, iso
 
 ## Consequences
 
-* **Positive:** Prevents unexpected node restarts during routine configuration runs; enables single-node rolling reboots during active maintenance windows.
-* **Negative:** Administrative action is required to manual invoke `reboot.yml` after changing kernel options.
+- **Positive:** Prevents unexpected node restarts during routine configuration runs; enables single-node rolling reboots during active maintenance windows.
+- **Negative:** Administrative action is required to manual invoke `reboot.yml` after changing kernel options.

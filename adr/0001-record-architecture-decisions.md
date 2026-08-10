@@ -1,7 +1,7 @@
 # 1. Record Architecture Decisions
 
-* **Status:** Accepted
-* **Date:** 2026-08-09
+- **Status:** Accepted
+- **Date:** 2026-08-09
 
 ## Context
 
@@ -13,5 +13,5 @@ We will use Architecture Decision Records (ADRs) as framed by Michael Nygard. AD
 
 ## Consequences
 
-* Future structural changes and tradeoffs will be documented in a predictable, reproducible format.
-* The main `README.md` can remain focused on installation and operational commands rather than dense design rationales.
+- Future structural changes and tradeoffs will be documented in a predictable, reproducible format.
+- The main `README.md` can remain focused on installation and operational commands rather than dense design rationales.

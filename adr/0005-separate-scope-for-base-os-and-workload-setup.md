@@ -1,7 +1,7 @@
 # 5. Separate Scope for Base OS and Workload Setup
 
-* **Status:** Accepted
-* **Date:** 2026-08-09
+- **Status:** Accepted
+- **Date:** 2026-08-09
 
 ## Context
 
@@ -13,5 +13,5 @@ Decouple hardware platform tuning from workload orchestrators. This repository s
 
 ## Consequences
 
-* **Positive:** The base OS automation remains agnostic to future orchestrator choices (Kubernetes, Incus, systemd-nspawn, Docker).
-* **Negative:** Requires running separate playbooks sequentially when bootstrapping new nodes from scratch.
+- **Positive:** The base OS automation remains agnostic to future orchestrator choices (Kubernetes, Incus, systemd-nspawn, Docker).
+- **Negative:** Requires running separate playbooks sequentially when bootstrapping new nodes from scratch.

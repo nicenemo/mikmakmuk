@@ -1,7 +1,7 @@
 # 4. Ansible for Declarative Agentless Automation
 
-* **Status:** Accepted
-* **Date:** 2026-08-09
+- **Status:** Accepted
+- **Date:** 2026-08-09
 
 ## Context
 
@@ -13,5 +13,5 @@ Adopt Ansible as the sole configuration management framework for cluster setup, 
 
 ## Consequences
 
-* **Positive:** Provides agentless management over standard SSH, strict task idempotency (`changed=0` on clean runs), and simple YAML-based task definitions.
-* **Negative:** Requires managing OpenSSH authentication mechanics and Python dependency environments on the control laptop.
+- **Positive:** Provides agentless management over standard SSH, strict task idempotency (`changed=0` on clean runs), and simple YAML-based task definitions.
+- **Negative:** Requires managing OpenSSH authentication mechanics and Python dependency environments on the control laptop.

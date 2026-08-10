@@ -18,3 +18,4 @@ mikmakmuk/
 │   └── reboot.yml           # Rolling single-node reboot maintenance playbook
 ├── blogpost.md              # Hugo static site blog post
 └── AGENTS.md                # AI instructions (this file)
+```

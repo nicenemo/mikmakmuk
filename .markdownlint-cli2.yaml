@@ -1,0 +1,32 @@
+---
+# markdownlint-cli2 configuration
+
+config:
+  # MD004: Unordered list style (consistent asterisks)
+  MD004:
+    style: "asterisk"
+
+  # MD013: Line length (enforce 120 chars to match Prettier)
+  MD013:
+    line_length: 120
+    heading_line_length: 120
+    code_blocks: false  # Don't break on long commands or URLs in code
+    tables: false       # Don't break on wide Markdown tables
+
+  # MD024: Multiple headings with the same content (allowed in separate sub-sections)
+  MD024:
+    siblings_only: true
+
+  # MD029: Ordered list item prefix - Allow 1. 1. 1. or sequential
+  MD029:
+    style: "one_or_ordered"
+
+  # MD033: Inline HTML - Disabled (allows raw HTML tags if needed)
+  MD033: false
+
+# Ignore files/directories
+ignores:
+  - ".git/"
+  - ".ansible/"
+  - "node_modules/"
+  - "playbooks/"
