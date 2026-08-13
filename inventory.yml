@@ -6,6 +6,8 @@ all:
       - tmux
       - btop
       - wget
+      - networkmanager
+
   children:
     cluster_nodes:
       hosts:
@@ -14,30 +16,43 @@ all:
           ansible_user: kruse
           ram_gb: 64
           cpu_type: 8500
+
+          elasticsearch_ip: 192.168.105.210/24
+          node_type: primary_master
+
           cluster_roles:
-            - control_plane
-            - worker
+            - elasticsearch_node
           node_packages:
             - rsync
             - tree
             - tmux
+
         mak:
           ansible_host: 192.168.105.3
           ansible_user: kruse
           ram_gb: 32
           cpu_type: 8500T
+
+          elasticsearch_ip: 192.168.105.220/24
+          kibana_ip: 192.168.105.221/24
+
           cluster_roles:
-            - worker
+            - elasticsearch_node
+            - kibana_node
           node_packages:
             - htop
             - ncdu
-#       muk:
-#         ansible_host: 192.168.105.4
-#         ansible_user: kruse
-#         ram_gb: 16
-#         cpu_type: 8500T
-#         cluster_roles:
-#           - worker
-#         node_packages:
-#           - iotop
-#           - duf
+
+        muk:
+          ansible_host: 192.168.105.4
+          ansible_user: kruse
+          ram_gb: 16
+          cpu_type: 8500T
+
+          elasticsearch_ip: 192.168.105.230/24
+
+          cluster_roles:
+            - elasticsearch_node
+          node_packages:
+            - iotop
+            - duf
