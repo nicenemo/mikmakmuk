@@ -1,0 +1,112 @@
+#!/usr/bin/ansible-playbook
+---
+- name: Extract Diagnostics and Logs from All Servers
+  hosts: all
+  gather_facts: no
+  vars:
+    ansible_user: kruse
+    local_log_dir: "/tmp/logs_{{ inventory_hostname }}"
+
+  tasks:
+    - name: Ensure host-specific local log directory exists
+      ansible.builtin.file:
+        path: "{{ local_log_dir }}"
+        state: directory
+      delegate_to: localhost
+      become: no
+
+    - name: Fetch recent kernel dmesg log
+      ansible.builtin.shell:
+        cmd: "dmesg -T --level=emerg,alert,crit,err,warn > /tmp/dmesg_warn.log && dmesg -T > /tmp/dmesg_full.log"
+      register: result
+      until: result.rc == 0
+      retries: 3
+      delay: 5
+      ignore_errors: yes
+
+    - name: Fetch persistent systemd journal logs (current and previous boots)
+      ansible.builtin.shell:
+        cmd: |
+          journalctl -b 0 -e --no-pager > /tmp/journal_current_boot.log
+          journalctl -b -1 -e --no-pager > /tmp/journal_previous_boot.log 2>/dev/null || true
+      register: result
+      until: result.rc == 0
+      retries: 3
+      delay: 5
+      ignore_errors: yes
+
+    - name: Fetch SSH daemon and authentication logs
+      ansible.builtin.shell:
+        cmd: |
+          {
+            echo "=== SSH Service Journal Entries (Current Boot) ==="
+            journalctl -u ssh -u sshd -u sshd.service -b 0 --no-pager 2>/dev/null
+            echo "=== Auth / Secure Logs (Last 500 Lines) ==="
+            tail -n 500 /var/log/auth.log 2>/dev/null || tail -n 500 /var/log/secure 2>/dev/null || true
+          } > /tmp/ssh_auth.log
+      register: result
+      until: result.rc == 0
+      retries: 3
+      delay: 5
+      ignore_errors: yes
+
+    - name: Fetch hardware and thermal information
+      ansible.builtin.shell:
+        cmd: |
+          {
+            echo "=== CPU & Thermal Stats ==="
+            sensors 2>/dev/null || cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null
+            echo "=== Last Boot Logs / Shutdown Reasons ==="
+            last -x shutdown reboot 2>/dev/null
+            echo "=== Memory Info ==="
+            free -h
+          } > /tmp/hardware_info.log
+      register: result
+      until: result.rc == 0
+      retries: 3
+      delay: 5
+      ignore_errors: yes
+
+    - name: Set permissions on generated log files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        mode: '0644'
+      loop:
+        - /tmp/dmesg_warn.log
+        - /tmp/dmesg_full.log
+        - /tmp/journal_current_boot.log
+        - /tmp/journal_previous_boot.log
+        - /tmp/ssh_auth.log
+        - /tmp/hardware_info.log
+      ignore_errors: yes
+
+    - name: Pull logs back to local machine
+      ansible.builtin.fetch:
+        src: "{{ item }}"
+        dest: "{{ local_log_dir }}/"
+        flat: yes
+      loop:
+        - /tmp/dmesg_warn.log
+        - /tmp/dmesg_full.log
+        - /tmp/journal_current_boot.log
+        - /tmp/journal_previous_boot.log
+        - /tmp/ssh_auth.log
+        - /tmp/hardware_info.log
+      register: fetch_result
+      until: fetch_result is not failed
+      retries: 3
+      delay: 5
+      become: no
+
+    - name: Clean up temporary files on host
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/dmesg_warn.log
+        - /tmp/dmesg_full.log
+        - /tmp/journal_current_boot.log
+        - /tmp/journal_previous_boot.log
+        - /tmp/ssh_auth.log
+        - /tmp/hardware_info.log
+      ignore_errors: yes
