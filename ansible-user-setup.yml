@@ -10,6 +10,9 @@
       community.crypto.openssh_keypair:
         path: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519_ansible"
         type: ed25519
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
+        mode: '0600'
         regenerate: full_idempotence
 
 - name: Bootstrap Managed Nodes

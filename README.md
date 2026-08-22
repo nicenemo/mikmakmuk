@@ -76,13 +76,29 @@ sudo ufw allow 22/tcp
 sudo ufw reload
 ```
 
-## 3. Running playbooks
+## 3. Running Playbooks
 
-```bash
-# First setup run (prompts for initial SSH password and sudo password)
-./setup.yml -k
+Management is split into two phases: **One-time Management User Provisioning** and **Routine Cluster Operations**.
 
-# Subsequent runs (uses deployed SSH keys, only prompts for sudo password)
+### Phase A: Management User Setup / Teardown (Run Once)
+
+The dedicated Ansible management user (`myansibleuser`) and SSH keys must be bootstrapped using your personal account (`bootstrap_user: kruse`). 
+
+> **Important (PAM Lockout Prevention):** Both bootstrap and teardown playbooks use a specialized shebang (`ANSIBLE_SSH_CONTROL_PATH=none`). This temporarily disables SSH socket multiplexing for user setup tasks to prevent SSH connection socket caching from triggering rapid `pam_faillock` account lockouts on CachyOS/Arch.
+
+* **Provision Management User:**
+  `./ansible-user-setup.yml -K`
+  *(Prompts once for your user's sudo password to create `myansibleuser`, copy SSH public keys, and configure passwordless sudo)*.
+
+* **Teardown Management User:**
+  `./ansible-user-teardown.yml -K`
+  *(Removes `myansibleuser`, its `/etc/sudoers.d/` rule, and local SSH control keys)*.
+
+### Phase B: Cluster Configuration & Operations
+
+Once the management user is provisioned, standard maintenance runs passwordlessly via `myansibleuser` over persistent SSH multiplexing.
+
+# Apply Base OS Setup & Tuning (Fully automated, passwordless)
 ./setup.yml
 
 # Cluster rolling reboot (reboots one node at a time)
@@ -91,11 +107,24 @@ ansible-playbook playbooks/reboot.yml
 # Reboot a single specific node
 ansible-playbook playbooks/reboot.yml --limit muk
 
-# Teardown / Revert base configurations
+# Teardown / Revert base system configurations
 ./teardown.yml
-```
 
-## 4 What Base Setup Applies
+
+## 4 Rationale: Dedicated Automation Lifecycle
+
+Minimal base OS installs lack a standardized identity for background automation. Operating directly through personal user accounts for cluster tasks introduces clear security and reliability risks:
+
+* **Access Decoupling:** Personal SSH keys should never double as service credentials. Provisioning a dedicated keypair for `myansibleuser` isolates interactive admin access from continuous integration and automation.
+
+
+* **Scoped Escalation:** Interactive accounts remain protected by mandatory password checks for `sudo`. Giving `myansibleuser` explicit `NOPASSWD` rights enables non-interactive, unattended playbooks to complete without breaking system security for human operators.
+
+
+* **Ephemeral Footprint:** The combination of `ansible-user-setup.yml` and `ansible-user-teardown.yml` allows management credentials to be provisioned on demand and purged completely whenever a node is decommissioned, keeping the attack surface minimal.
+
+
+## 5 What Base Setup Applies
 
 - **SSH Key Deployment:** Discovers local `~/.ssh/*.pub` keys on your control machine and provisions `authorized_keys` on target hosts ([OpenSSH Specification](https://www.openssh.com/manual.html)).
 - **Package & Keyring Maintenance:** Updates Arch and CachyOS keyrings, syncs system packages (`pacman -Syu`), and installs hardware drivers (`intel-media-driver`, `libva-intel-driver`, `mesa`) ([Arch Wiki: VA-API](https://wiki.archlinux.org/title/Hardware_video_acceleration)).
@@ -108,3 +137,25 @@ ansible-playbook playbooks/reboot.yml --limit muk
   - `nvme_core.default_ps_max_latency_us=0`: Disables deep NVMe power-saving states to eliminate storage I/O latency and PCI bus disconnects ([Linux Kernel NVMe Driver Parameters](https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html)).
 - **GPU Module:** Loads the `i915` kernel module on boot ([Arch Wiki: Kernel Modules](https://wiki.archlinux.org/title/Kernel_module)).
 - **Disabled Undervolting:** Deploys `templates/intel-undervolt.conf.j2` with `enable false` and ensures `intel-undervolt.service` is stopped to prevent systemd service failures caused by HP BIOS microcode locks ([Intel Plundervolt Vulnerability / INTEL-SA-00289](https://www.intel.com/content/www/us/en/security-center/advisory/intel-sa-00289.html)).
+
+
+## 6. Troubleshooting: PAM Lockouts
+CachyOS enforces strict authentication limits via pam_faillock. Rapid connection attempts or password mismatches will temporarily lock accounts out of sudo privilege escalation, even while SSH key logins continue to work seamlessly.
+
+1. Diagnosing Lockouts
+
+Check active lockouts on a target host:
+
+sudo faillock
+sudo faillock --user kruse
+
+2. Clearing Lockouts
+
+Clear authentication counters directly on a host:
+
+sudo faillock --reset
+sudo faillock --user kruse --reset
+
+3. Prevention
+
+Always execute bootstrap and teardown operations using the repository's provided playbooks (./ansible-user-setup.yml and ./ansible-user-teardown.yml). Their built-in shebang disables SSH multiplexing socket caching (ANSIBLE_SSH_CONTROL_PATH=none), preventing SSH reuse from triggering rapid PAM rate limits.

@@ -28,6 +28,7 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  become: false
   tasks:
     - name: Remove dedicated Ansible SSH private and public key from controller
       ansible.builtin.file:

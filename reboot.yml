@@ -1,0 +1,17 @@
+#!/usr/bin/env -S sh -c 'ANSIBLE_SSH_CONTROL_PATH=none exec ansible-playbook "$0" "$@"'
+---
+- name: Rolling Reboot of Cluster Nodes
+  hosts: cluster_nodes
+  gather_facts: false
+  become: true
+  serial: 1
+
+  tasks:
+    - name: Reboot node cleanly and wait for return
+      ansible.builtin.reboot:
+        msg: "Rebooting node via Ansible"
+        connect_timeout: 5
+        reboot_timeout: 300
+        pre_reboot_delay: 0
+        post_reboot_delay: 5
+        test_command: uptime
