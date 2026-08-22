@@ -1,10 +1,39 @@
+#!/usr/bin/env ansible-playbook
 ---
 - name: Remove Managed Node Ansible User
   hosts: all
+  gather_facts: false
   become: true
   vars:
     target_user: "{{ hostvars[inventory_hostname]['ansible_user'] }}"
     ansible_user: "{{ bootstrap_user }}"
+    # Fallback key types ordered by security preference
+    personal_key_types:
+      - id_ed25519
+      - id_ecdsa
+      - id_rsa
+
+  pre_tasks:
+    - name: Locate local personal SSH private keys on control machine
+      ansible.builtin.stat:
+        path: "{{ lookup('env', 'HOME') }}/.ssh/{{ item }}"
+      delegate_to: localhost
+      become: false
+      register: personal_key_stats
+      loop: "{{ personal_key_types }}"
+
+    - name: Extract highest priority local SSH private key
+      ansible.builtin.set_fact:
+        ansible_ssh_private_key_file: >-
+          {{
+            lookup('env', 'HOME') + '/.ssh/' +
+            (personal_key_stats.results
+              | selectattr('stat.exists', 'defined')
+              | selectattr('stat.exists')
+              | map(attribute='item')
+              | list
+              | first)
+          }}
 
   tasks:
     - name: Remove passwordless sudoers file
