@@ -67,3 +67,4 @@ collections/
 
 # Tooling caches (e.g., markdownlint)
 .markdownlint-cli2-cache
+build/
