@@ -1,0 +1,42 @@
+---
+- name: Generate Control Node Key
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Generate dedicated SSH key for Ansible on controller
+      community.crypto.openssh_keypair:
+        path: ~/.ssh/id_ed25519_ansible
+        type: ed25519
+
+- name: Bootstrap Managed Nodes
+  hosts: all
+  become: true
+  vars:
+    # 1. Grab target user ('myansibleuser') from inventory before overriding connection
+    target_user: "{{ hostvars[inventory_hostname]['ansible_user'] }}"
+    # 2. Perform the switcheroo: force SSH to connect via 'kruse' for bootstrapping
+    ansible_user: "{{ bootstrap_user }}"
+
+  tasks:
+    - name: Create Ansible management user on target node
+      ansible.builtin.user:
+        name: "{{ target_user }}"
+        groups: sudo
+        shell: /bin/bash
+        generate_ssh_key: true
+        ssh_key_type: ed25519
+        ssh_key_file: ".ssh/id_ed25519_{{ target_user }}"
+
+    - name: Add Ansible control node public key for SSH access
+      ansible.posix.authorized_key:
+        user: "{{ target_user }}"
+        state: present
+        key: "{{ lookup('file', '~/.ssh/id_ed25519_ansible.pub') }}"
+
+    - name: Configure passwordless sudo
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ target_user }}"
+        content: "{{ target_user }} ALL=(ALL) NOPASSWD: ALL\n"
+        mode: '0440'
+        validate: 'visudo -cf %s'

@@ -1,5 +1,9 @@
 all:
   vars:
+    ansible_user: myansibleuser
+    bootstrap_user: kruse
+    # Key used by Ansible for regular runs after bootstrapping:
+    ansible_ssh_private_key_file: ~/.ssh/id_ed25519_ansible
     ansible_python_interpreter: /usr/bin/python3
     common_packages:
       - neovim
@@ -11,7 +15,6 @@ all:
       hosts:
         mik:
           ansible_host: 192.168.105.2
-          ansible_user: kruse
           ram_gb: 64
           cpu_type: 8500
           cluster_roles:
@@ -23,7 +26,6 @@ all:
             - tmux
         mak:
           ansible_host: 192.168.105.3
-          ansible_user: kruse
           ram_gb: 32
           cpu_type: 8500T
           cluster_roles:
@@ -31,13 +33,12 @@ all:
           node_packages:
             - htop
             - ncdu
-#       muk:
-#         ansible_host: 192.168.105.4
-#         ansible_user: kruse
-#         ram_gb: 16
-#         cpu_type: 8500T
-#         cluster_roles:
-#           - worker
-#         node_packages:
-#           - iotop
-#           - duf
+        muk:
+          ansible_host: 192.168.105.4
+          ram_gb: 16
+          cpu_type: 8500T
+          cluster_roles:
+            - worker
+          node_packages:
+            - iotop
+            - duf

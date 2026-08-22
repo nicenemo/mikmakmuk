@@ -1,0 +1,33 @@
+---
+- name: Remove Managed Node Ansible User
+  hosts: all
+  become: true
+  vars:
+    target_user: "{{ hostvars[inventory_hostname]['ansible_user'] }}"
+    ansible_user: "{{ bootstrap_user }}"
+
+  tasks:
+    - name: Remove passwordless sudoers file
+      ansible.builtin.file:
+        path: "/etc/sudoers.d/{{ target_user }}"
+        state: absent
+
+    - name: Remove Ansible user account and home directory
+      ansible.builtin.user:
+        name: "{{ target_user }}"
+        state: absent
+        remove: true
+        force: true
+
+- name: Clean Control Node Key
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Remove dedicated Ansible SSH private and public key from controller
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - ~/.ssh/id_ed25519_ansible
+        - ~/.ssh/id_ed25519_ansible.pub
