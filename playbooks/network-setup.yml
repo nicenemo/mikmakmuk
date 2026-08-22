@@ -1,0 +1,89 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Configure Static IP Addresses via NetworkManager
+  hosts: cluster_nodes
+  become: true
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Ensure NetworkManager is Installed and Running
+    # -------------------------------------------------------------------------
+    - name: Ensure NetworkManager package is present
+      community.general.pacman:
+        name: networkmanager
+        state: present
+
+    - name: Ensure NetworkManager service is enabled and running
+      ansible.builtin.systemd:
+        name: NetworkManager
+        enabled: true
+        state: started
+
+    # -------------------------------------------------------------------------
+    # 2. Discover Active NetworkManager Connection & Current IP
+    # -------------------------------------------------------------------------
+    - name: Get active interface name from facts
+      ansible.builtin.set_fact:
+        active_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+
+    - name: Fetch active NetworkManager connection names
+      ansible.builtin.command:
+        cmd: "nmcli -t -f NAME,DEVICE connection show --active"
+      register: nmcli_active_connections
+      changed_when: false
+
+    - name: Initialize connection name fact
+      ansible.builtin.set_fact:
+        active_conn_name: ""
+
+    - name: Match active connection name for interface
+      ansible.builtin.set_fact:
+        active_conn_name: "{{ item.split(':')[0] }}"
+      loop: "{{ nmcli_active_connections.stdout_lines }}"
+      when:
+        - item | length > 0
+        - item.split(':')[1] == active_interface
+
+    - name: Fail if no active NetworkManager connection was found
+      ansible.builtin.fail:
+        msg: "Unable to find an active NetworkManager connection on interface {{ active_interface }}"
+      when: active_conn_name == ""
+
+    # -------------------------------------------------------------------------
+    # 3. Build IP List (Existing DHCP IP + Extra Cluster IPs)
+    # -------------------------------------------------------------------------
+    - name: Extract current active IP address with CIDR prefix
+      ansible.builtin.set_fact:
+        current_ip_cidr: "{{ ansible_facts['default_ipv4']['address'] }}/{{ ansible_facts['default_ipv4']['prefix'] }}"
+
+    - name: Build target IP list with primary IP and cluster IPs
+      ansible.builtin.set_fact:
+        target_ips: >-
+          {{
+            [current_ip_cidr] +
+            [elasticsearch_ip] +
+            ([kibana_ip] if kibana_ip is defined else [])
+          }}
+
+    # -------------------------------------------------------------------------
+    # 4. Apply Static IPs to Active NM Connection
+    # -------------------------------------------------------------------------
+    - name: Configure static IP addresses on active NM connection
+      community.general.nmcli:
+        conn_name: "{{ active_conn_name }}"
+        type: ethernet
+        ip4: "{{ target_ips }}"
+        gw4: "{{ ansible_facts['default_ipv4']['gateway'] }}"
+        dns4: "{{ ansible_facts['dns']['nameservers'] }}"
+        state: present
+      notify: Reload network connection setup
+
+  # ---------------------------------------------------------------------------
+  # Handlers
+  # ---------------------------------------------------------------------------
+  handlers:
+    # systemd-run ontkoppelt de netwerktaak volledig van de Ansible SSH-sessie
+    - name: Reload network connection setup
+      ansible.builtin.command:
+        cmd: "systemd-run --on-active=2s nmcli connection up '{{ active_conn_name }}'"
+      changed_when: false

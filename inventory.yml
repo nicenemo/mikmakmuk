@@ -10,10 +10,13 @@ all:
 
   children:
     cluster_nodes:
+      vars:
+        elk_version: 9.5.0
+        ansible_user: kruse
       hosts:
         mik:
-          ansible_host: 192.168.105.2
           ansible_user: kruse
+          ansible_host: 192.168.105.2
           ram_gb: 64
           cpu_type: 8500
 
@@ -28,8 +31,8 @@ all:
             - tmux
 
         mak:
-          ansible_host: 192.168.105.3
           ansible_user: kruse
+          ansible_host: 192.168.105.3
           ram_gb: 32
           cpu_type: 8500T
 
@@ -44,8 +47,8 @@ all:
             - ncdu
 
         muk:
-          ansible_host: 192.168.105.4
           ansible_user: kruse
+          ansible_host: 192.168.105.4
           ram_gb: 16
           cpu_type: 8500T
 

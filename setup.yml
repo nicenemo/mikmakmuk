@@ -2,3 +2,8 @@
 ---
 - name: Import Base Setup Playbook
   ansible.builtin.import_playbook: playbooks/base-setup.yml
+- name: Import Network Setup Playbook
+  ansible.builtin.import_playbook: playbooks/network-setup.yml
+- name: Import Elasticsearch package and deploy Playbook
+  ansible.builtin.import_playbook: playbooks/elasticsearch-package-and-deploy.yml
+
