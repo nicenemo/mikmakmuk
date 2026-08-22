@@ -1,8 +1,8 @@
 all:
   vars:
-    ansible_user: myansibleuser
     bootstrap_user: kruse
-    ansible_ssh_private_key_file: ~/.ssh/id_ed25519_ansible
+    ansible_management_user: myansibleuser
+    ansible_user: "{{ ansible_management_user }}"
     ansible_python_interpreter: /usr/bin/python3
     common_packages:
       - neovim
@@ -14,14 +14,14 @@ all:
   children:
     cluster_nodes:
       hosts:
-        mik:
-          ansible_host: 192.168.105.2
-          ram_gb: 64
-          cpu_type: 8500
-          node_packages:
-            - rsync
-            - tree
-            - tmux
+#       mik:
+#         ansible_host: 192.168.105.2
+#         ram_gb: 64
+#         cpu_type: 8500
+#         node_packages:
+#           - rsync
+#           - tree
+#           - tmux
         mak:
           ansible_host: 192.168.105.3
           ram_gb: 32
@@ -29,10 +29,10 @@ all:
           node_packages:
             - htop
             - ncdu
-        muk:
-          ansible_host: 192.168.105.4
-          ram_gb: 16
-          cpu_type: 8500T
-          node_packages:
-            - iotop
-            - duf
+#       muk:
+#         ansible_host: 192.168.105.4
+#         ram_gb: 16
+#         cpu_type: 8500T
+#         node_packages:
+#           - iotop
+#           - duf

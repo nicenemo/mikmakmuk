@@ -5,48 +5,24 @@
   gather_facts: false
   become: true
   vars:
-    target_user: "{{ hostvars[inventory_hostname]['ansible_user'] }}"
     ansible_user: "{{ bootstrap_user }}"
-    # Fallback key types ordered by security preference
-    personal_key_types:
-      - id_ed25519
-      - id_ecdsa
-      - id_rsa
-
-  pre_tasks:
-    - name: Locate local personal SSH private keys on control machine
-      ansible.builtin.stat:
-        path: "{{ lookup('env', 'HOME') }}/.ssh/{{ item }}"
-      delegate_to: localhost
-      become: false
-      register: personal_key_stats
-      loop: "{{ personal_key_types }}"
-
-    - name: Extract highest priority local SSH private key
-      ansible.builtin.set_fact:
-        ansible_ssh_private_key_file: >-
-          {{
-            lookup('env', 'HOME') + '/.ssh/' +
-            (personal_key_stats.results
-              | selectattr('stat.exists', 'defined')
-              | selectattr('stat.exists')
-              | map(attribute='item')
-              | list
-              | first)
-          }}
+    ansible_ssh_private_key_file: ""
 
   tasks:
-    - name: Remove passwordless sudoers file
+    - name: Remove passwordless sudoers file for management user
       ansible.builtin.file:
-        path: "/etc/sudoers.d/{{ target_user }}"
+        path: "/etc/sudoers.d/{{ ansible_management_user }}"
         state: absent
 
-    - name: Remove Ansible user account and home directory
+    - name: Remove management user account and home directory
       ansible.builtin.user:
-        name: "{{ target_user }}"
+        name: "{{ ansible_management_user }}"
         state: absent
         remove: true
         force: true
+
+    - name: Flush SSH connections
+      ansible.builtin.meta: reset_connection
 
 - name: Clean Control Node Key
   hosts: localhost
@@ -58,5 +34,5 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - ~/.ssh/id_ed25519_ansible
-        - ~/.ssh/id_ed25519_ansible.pub
+        - "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519_ansible"
+        - "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519_ansible.pub"

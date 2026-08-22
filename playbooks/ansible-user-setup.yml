@@ -1,43 +1,45 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: Generate Control Node Key
+- name: Prepare Control Node
   hosts: localhost
   connection: local
   gather_facts: false
+
   tasks:
-    - name: Generate dedicated SSH key for Ansible on controller
+    - name: Ensure dedicated SSH key exists on control node
       community.crypto.openssh_keypair:
-        path: ~/.ssh/id_ed25519_ansible
+        path: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519_ansible"
         type: ed25519
+        regenerate: full_idempotence
 
 - name: Bootstrap Managed Nodes
   hosts: all
+  gather_facts: false
   become: true
   vars:
-    # 1. Grab target user ('myansibleuser') from inventory before overriding connection
-    target_user: "{{ hostvars[inventory_hostname]['ansible_user'] }}"
-    # 2. Perform the switcheroo: force SSH to connect via 'kruse' for bootstrapping
     ansible_user: "{{ bootstrap_user }}"
+    ansible_ssh_private_key_file: ""
 
   tasks:
     - name: Create Ansible management user on target node
       ansible.builtin.user:
-        name: "{{ target_user }}"
-        groups: sudo
+        name: "{{ ansible_management_user }}"
+        groups: wheel
+        append: true
         shell: /bin/bash
-        generate_ssh_key: true
-        ssh_key_type: ed25519
-        ssh_key_file: ".ssh/id_ed25519_{{ target_user }}"
 
     - name: Add Ansible control node public key for SSH access
       ansible.posix.authorized_key:
-        user: "{{ target_user }}"
+        user: "{{ ansible_management_user }}"
         state: present
-        key: "{{ lookup('file', '~/.ssh/id_ed25519_ansible.pub') }}"
+        key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519_ansible.pub') }}"
 
     - name: Configure passwordless sudo
       ansible.builtin.copy:
-        dest: "/etc/sudoers.d/{{ target_user }}"
-        content: "{{ target_user }} ALL=(ALL) NOPASSWD: ALL\n"
+        dest: "/etc/sudoers.d/{{ ansible_management_user }}"
+        content: "{{ ansible_management_user }} ALL=(ALL) NOPASSWD: ALL\n"
         mode: '0440'
         validate: 'visudo -cf %s'
+
+    - name: Flush SSH connection sockets after bootstrap
+      ansible.builtin.meta: reset_connection
