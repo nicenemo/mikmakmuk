@@ -29,10 +29,10 @@ all:
           node_packages:
             - htop
             - ncdu
-#       muk:
-#         ansible_host: 192.168.105.4
-#         ram_gb: 16
-#         cpu_type: 8500T
-#         node_packages:
-#           - iotop
-#           - duf
+        muk:
+          ansible_host: 192.168.105.4
+          ram_gb: 16
+          cpu_type: 8500T
+          node_packages:
+            - iotop
+            - duf

@@ -1,7 +1,5 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: Import Ansible User Setup Playbook
-  ansible.builtin.import_playbook: playbooks/ansible-user-setup.yml
 - name: Import Base Setup Playbook
   ansible.builtin.import_playbook: playbooks/base-setup.yml
 

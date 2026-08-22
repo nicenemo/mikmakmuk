@@ -2,5 +2,3 @@
 ---
 - name: Import Base Teardown Playbook
   ansible.builtin.import_playbook: playbooks/base-teardown.yml
-- name: Import Ansible User Teardown Playbook
-  ansible.builtin.import_playbook: playbooks/ansible-user-teardown.yml

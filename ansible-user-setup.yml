@@ -1,4 +1,4 @@
-#!/usr/bin/env ansible-playbook
+#!/usr/bin/env -S sh -c 'ANSIBLE_SSH_CONTROL_PATH=none exec ansible-playbook "$0" "$@"'
 ---
 - name: Prepare Control Node
   hosts: localhost
