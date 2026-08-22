@@ -10,11 +10,9 @@
     # -------------------------------------------------------------------------
     - name: Stop and disable hardware management services
       ansible.builtin.systemd:
-        name: "{{ item }}"
+        name: powertop
         enabled: false
         state: stopped
-      loop:
-        - powertop
       failed_when: false
 
     # -------------------------------------------------------------------------

@@ -1,5 +1,8 @@
 all:
   vars:
+    ansible_user: myansibleuser
+    bootstrap_user: kruse
+    ansible_ssh_private_key_file: ~/.ssh/id_ed25519_ansible
     ansible_python_interpreter: /usr/bin/python3
     common_packages:
       - neovim
@@ -10,52 +13,26 @@ all:
 
   children:
     cluster_nodes:
-      vars:
-        elk_version: 9.5.0
-        ansible_user: kruse
       hosts:
         mik:
-          ansible_user: kruse
           ansible_host: 192.168.105.2
           ram_gb: 64
           cpu_type: 8500
-
-          elasticsearch_ip: 192.168.105.210/24
-          node_type: primary_master
-
-          cluster_roles:
-            - elasticsearch_node
           node_packages:
             - rsync
             - tree
             - tmux
-
         mak:
-          ansible_user: kruse
           ansible_host: 192.168.105.3
           ram_gb: 32
           cpu_type: 8500T
-
-          elasticsearch_ip: 192.168.105.220/24
-          kibana_ip: 192.168.105.221/24
-
-          cluster_roles:
-            - elasticsearch_node
-            - kibana_node
           node_packages:
             - htop
             - ncdu
-
         muk:
-          ansible_user: kruse
           ansible_host: 192.168.105.4
           ram_gb: 16
           cpu_type: 8500T
-
-          elasticsearch_ip: 192.168.105.230/24
-
-          cluster_roles:
-            - elasticsearch_node
           node_packages:
             - iotop
             - duf

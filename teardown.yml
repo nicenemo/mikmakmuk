@@ -1,8 +1,6 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: Import Elasticsearch uninstall Playbook
-  ansible.builtin.import_playbook: playbooks/elasticsearch-uninstall.yml
-- name: Import Network Teardown Playbook
-  ansible.builtin.import_playbook: playbooks/network-teardown.yml
 - name: Import Base Teardown Playbook
   ansible.builtin.import_playbook: playbooks/base-teardown.yml
+- name: Import Ansible User Teardown Playbook
+  ansible.builtin.import_playbook: playbooks/ansible-user-teardown.yml

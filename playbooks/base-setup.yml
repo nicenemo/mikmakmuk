@@ -3,51 +3,10 @@
 - name: Apply Base System Optimizations and Configuration
   hosts: cluster_nodes
   become: true
-  vars:
-    required_ssh_key_types:
-      - id_ed25519.pub
-      - id_rsa.pub
-      - id_ecdsa.pub
 
   tasks:
     # -------------------------------------------------------------------------
-    # 1. SSH Key Discovery & Deployment
-    # -------------------------------------------------------------------------
-    - name: Locate local SSH pubkeys on control machine
-      ansible.builtin.stat:
-        path: "{{ lookup('env', 'HOME') }}/.ssh/{{ item }}"
-      delegate_to: localhost
-      become: false
-      register: ssh_key_stats
-      loop: "{{ required_ssh_key_types }}"
-
-    - name: Extract first available local SSH key
-      ansible.builtin.set_fact:
-        found_ssh_key_path: >-
-          {{
-            (ssh_key_stats.results
-              | selectattr('stat.exists', 'defined')
-              | selectattr('stat.exists')
-              | map(attribute='item')
-              | list
-              | first) | default('')
-          }}
-
-    - name: Bail out if no local SSH public keys exist
-      ansible.builtin.fail:
-        msg: >-
-          CRITICAL ERROR: No valid SSH public key found in
-          {{ lookup('env', 'HOME') }}/.ssh/
-      when: found_ssh_key_path == ""
-
-    - name: Inject discovered SSH public key into authorized_keys
-      ansible.posix.authorized_key:
-        user: "{{ ansible_user }}"
-        state: present
-        key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/' + found_ssh_key_path) }}"
-
-    # -------------------------------------------------------------------------
-    # 2. Package Management & Keyring Maintenance
+    # 1. Package Management & Keyring Maintenance
     # -------------------------------------------------------------------------
     - name: Update Arch and CachyOS keyrings first
       community.general.pacman:
@@ -91,7 +50,7 @@
         state: present
 
     # -------------------------------------------------------------------------
-    # 3. Kernel Command Line & Hardware Tuning
+    # 2. Kernel Command Line & Hardware Tuning
     # -------------------------------------------------------------------------
     - name: Ensure /etc/cmdline.d directory exists
       ansible.builtin.file:
@@ -124,7 +83,7 @@
         state: present
 
     # -------------------------------------------------------------------------
-    # 4. Power & Thermal Management
+    # 3. Power & Thermal Management
     # -------------------------------------------------------------------------
     - name: Deploy PowerTOP auto-tune systemd service unit
       ansible.builtin.copy:
@@ -140,7 +99,6 @@
         name: powertop
         enabled: true
         state: started
-      loop:
 
   # ---------------------------------------------------------------------------
   # Handlers (Executed at end of play)
