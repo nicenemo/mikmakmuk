@@ -1,16 +1,30 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: Remove Static IP Addresses and Restore Default Network Setup
+- name: Ensure NetworkManager is Installed and Reset Interface to DHCP
   hosts: cluster_nodes
   become: true
 
   tasks:
     # -------------------------------------------------------------------------
-    # 1. Discover Active NetworkManager Connection
+    # 1. Ensure NetworkManager is Installed and Active
+    # -------------------------------------------------------------------------
+    - name: Ensure NetworkManager package is installed
+      ansible.builtin.package:
+        name: networkmanager
+        state: present
+
+    - name: Ensure NetworkManager service is enabled and running
+      ansible.builtin.systemd:
+        name: NetworkManager
+        state: started
+        enabled: true
+
+    # -------------------------------------------------------------------------
+    # 2. Discover Active NetworkManager Connection
     # -------------------------------------------------------------------------
     - name: Get active interface name from facts
       ansible.builtin.set_fact:
-        active_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+        active_interface: "{{ ansible_facts['default_ipv4']['interface'] | default('') }}"
 
     - name: Fetch active NetworkManager connection names
       ansible.builtin.command:
@@ -25,22 +39,22 @@
     - name: Match active connection name for interface
       ansible.builtin.set_fact:
         active_conn_name: "{{ item.split(':')[0] }}"
-      loop: "{{ nmcli_active_connections.stdout_lines }}"
+      loop: "{{ nmcli_active_connections.stdout_lines | default([]) }}"
       when:
         - item | length > 0
         - item.split(':')[1] == active_interface
 
     # -------------------------------------------------------------------------
-    # 2. Reset Connection Explicitly Back to Pure Automatic DHCP
+    # 3. Reset Connection Explicitly Back to Pure Automatic DHCP
     # -------------------------------------------------------------------------
     - name: Force IPv4 configuration back to automatic DHCP
       community.general.nmcli:
         conn_name: "{{ active_conn_name }}"
         type: ethernet
-        method4: auto      # Schakelt 'manual' modus uit en zet de interface op DHCP
-        ip4: []            # Verwijder alle statische IP-adressen
-        gw4: ""            # Verwijder statische gateway
-        dns4: []           # Verwijder statische DNS-servers
+        method4: auto
+        ip4: []
+        gw4: ""
+        dns4: []
         state: present
       when: active_conn_name != ""
       notify: Reload network connection teardown
@@ -49,7 +63,6 @@
   # Handlers
   # ---------------------------------------------------------------------------
   handlers:
-    # systemd-run ontkoppelt de netwerktaak volledig van de Ansible SSH-sessie
     - name: Reload network connection teardown
       ansible.builtin.command:
         cmd: "systemd-run --on-active=2s nmcli connection up '{{ active_conn_name }}'"
