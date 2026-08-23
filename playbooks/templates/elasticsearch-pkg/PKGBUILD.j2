@@ -1,0 +1,34 @@
+# Maintainer: Hans Kruse <kruse@hanskruse.eu>
+pkgname=elasticsearch
+pkgver={{ es_version }}
+pkgrel=1
+pkgdesc="Distributed, RESTful search and analytics engine"
+arch=('x86_64')
+url="https://www.elastic.co/products/elasticsearch"
+license=('Apache-2.0')
+depends=('java-runtime>=17' 'bash')
+optdepends=('java-environment: Java development kit')
+options=('!strip' '!zipman')
+source=("elasticsearch-${pkgver}-linux-x86_64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "${srcdir}/elasticsearch-${pkgver}"
+
+  # Create application directories
+  install -dm755 "${pkgdir}/usr/share/elasticsearch"
+  install -dm755 "${pkgdir}/etc/elasticsearch"
+  install -dm755 "${pkgdir}/var/lib/elasticsearch"
+  install -dm755 "${pkgdir}/var/log/elasticsearch"
+
+  # Copy base files to /usr/share/elasticsearch
+  cp -r bin lib modules plugins "${pkgdir}/usr/share/elasticsearch/"
+
+  # Copy default configuration files to /etc/elasticsearch
+  if [ -d config ]; then
+    cp -r config/* "${pkgdir}/etc/elasticsearch/"
+  fi
+
+  # Ensure symbolic link for config directory in application path
+  ln -s /etc/elasticsearch "${pkgdir}/usr/share/elasticsearch/config"
+}

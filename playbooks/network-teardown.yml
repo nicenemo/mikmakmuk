@@ -1,0 +1,56 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Remove Static IP Addresses and Restore Default Network Setup
+  hosts: cluster_nodes
+  become: true
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Discover Active NetworkManager Connection
+    # -------------------------------------------------------------------------
+    - name: Get active interface name from facts
+      ansible.builtin.set_fact:
+        active_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+
+    - name: Fetch active NetworkManager connection names
+      ansible.builtin.command:
+        cmd: "nmcli -t -f NAME,DEVICE connection show --active"
+      register: nmcli_active_connections
+      changed_when: false
+
+    - name: Initialize connection name fact
+      ansible.builtin.set_fact:
+        active_conn_name: ""
+
+    - name: Match active connection name for interface
+      ansible.builtin.set_fact:
+        active_conn_name: "{{ item.split(':')[0] }}"
+      loop: "{{ nmcli_active_connections.stdout_lines }}"
+      when:
+        - item | length > 0
+        - item.split(':')[1] == active_interface
+
+    # -------------------------------------------------------------------------
+    # 2. Reset Connection Explicitly Back to Pure Automatic DHCP
+    # -------------------------------------------------------------------------
+    - name: Force IPv4 configuration back to automatic DHCP
+      community.general.nmcli:
+        conn_name: "{{ active_conn_name }}"
+        type: ethernet
+        method4: auto      # Schakelt 'manual' modus uit en zet de interface op DHCP
+        ip4: []            # Verwijder alle statische IP-adressen
+        gw4: ""            # Verwijder statische gateway
+        dns4: []           # Verwijder statische DNS-servers
+        state: present
+      when: active_conn_name != ""
+      notify: Reload network connection teardown
+
+  # ---------------------------------------------------------------------------
+  # Handlers
+  # ---------------------------------------------------------------------------
+  handlers:
+    # systemd-run ontkoppelt de netwerktaak volledig van de Ansible SSH-sessie
+    - name: Reload network connection teardown
+      ansible.builtin.command:
+        cmd: "systemd-run --on-active=2s nmcli connection up '{{ active_conn_name }}'"
+      changed_when: false

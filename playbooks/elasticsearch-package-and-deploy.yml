@@ -1,0 +1,202 @@
+#!/usr/bin/env ansible-playbook
+---
+# =============================================================================
+# PART 1: Download Elasticsearch & Build CachyOS/Arch Package Locally
+# =============================================================================
+- name: Build CachyOS Elasticsearch Package Locally
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    # Fetches elk_version from inventory.yml (defaults to 9.5.0 if undefined)
+    target_version: "{{ hostvars[groups['cluster_nodes'][0]]['elk_version'] if (groups['cluster_nodes'] is defined and hostvars[groups['cluster_nodes'][0]]['elk_version'] is defined) else '9.5.0' }}"
+    build_user: "{{ ansible_env.SUDO_USER | default(lookup('env', 'USER')) }}"
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Validate download URL via a quick HTTP HEAD request
+    # -------------------------------------------------------------------------
+    - name: Verify if requested Elasticsearch version exists on Elastic servers
+      ansible.builtin.uri:
+        url: "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{ target_version }}-linux-x86_64.tar.gz"
+        method: HEAD
+        status_code: [200, 404]
+        timeout: 5
+      register: version_check
+      ignore_errors: true
+
+    - name: Fail early if Elasticsearch version is not available
+      ansible.builtin.fail:
+        msg: "Version '{{ target_version }}' does not exist on artifacts.elastic.co (HTTP Status {{ version_check.status }}). Please check 'elk_version' in inventory.yml!"
+      when: version_check.status != 200
+
+    - name: Set resolved version fact
+      ansible.builtin.set_fact:
+        resolved_elk_version: "{{ target_version }}"
+
+    - name: Display active ELK version
+      ansible.builtin.debug:
+        msg: "Elasticsearch version successfully verified: {{ resolved_elk_version }}"
+
+    # Share the resolved version with all cluster nodes
+    - name: Share resolved version with cluster nodes
+      ansible.builtin.set_fact:
+        elk_version: "{{ resolved_elk_version }}"
+      delegate_to: "{{ item }}"
+      delegate_facts: true
+      loop: "{{ groups['cluster_nodes'] }}"
+
+    # Define build path variables
+    - name: Set path facts for local build
+      ansible.builtin.set_fact:
+        build_dir: "{{ project_root }}/build/elasticsearch"
+        pkg_file_name: "elasticsearch-{{ resolved_elk_version }}-1-x86_64.pkg.tar.zst"
+
+    # -------------------------------------------------------------------------
+    # 2. Directory Setup, Download & Integrity Check
+    # -------------------------------------------------------------------------
+    - name: Create local build directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ build_dir }}"
+        - "{{ build_dir }}/pkg_build"
+
+    - name: Check if tarball already exists locally
+      ansible.builtin.stat:
+        path: "{{ build_dir }}/elasticsearch-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+      register: tarball_stat
+
+    - name: Download Elasticsearch tarball locally with live progress bar
+      ansible.builtin.shell:
+        cmd: >
+          wget --continue --progress=bar:force:noscroll
+          -O "{{ build_dir }}/elasticsearch-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+          "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+      when: not tarball_stat.stat.exists
+
+    - name: Download official SHA512 checksum file
+      ansible.builtin.get_url:
+        url: "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{ resolved_elk_version }}-linux-x86_64.tar.gz.sha512"
+        dest: "{{ build_dir }}/elasticsearch-{{ resolved_elk_version }}-linux-x86_64.tar.gz.sha512"
+        mode: '0644'
+
+    - name: Verify download integrity against official SHA512 checksum
+      ansible.builtin.shell:
+        cmd: "sha512sum -c elasticsearch-{{ resolved_elk_version }}-linux-x86_64.tar.gz.sha512"
+        chdir: "{{ build_dir }}"
+      register: checksum_verify
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 3. Build CachyOS/Arch Package via makepkg (Forced Non-Root User)
+    # -------------------------------------------------------------------------
+    - name: Check if CachyOS package already exists locally
+      ansible.builtin.stat:
+        path: "{{ build_dir }}/{{ pkg_file_name }}"
+      register: local_pkg_stat
+
+    - name: Ensure build directories are owned by standard user
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        owner: "{{ build_user }}"
+        group: "{{ build_user }}"
+        recurse: true
+
+    - name: Generate PKGBUILD file from template
+      ansible.builtin.template:
+        src: "{{ project_root }}/templates/elasticsearch-pkg/PKGBUILD.j2"
+        dest: "{{ build_dir }}/pkg_build/PKGBUILD"
+        mode: '0644'
+      vars:
+        es_version: "{{ resolved_elk_version }}"
+
+    - name: Copy downloaded tarball to pkg_build directory
+      ansible.builtin.copy:
+        src: "{{ build_dir }}/elasticsearch-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+        dest: "{{ build_dir }}/pkg_build/elasticsearch-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+      when: not local_pkg_stat.stat.exists
+
+    - name: Build CachyOS package using makepkg as unprivileged user
+      ansible.builtin.command:
+        cmd: "makepkg -f --nodeps"
+        chdir: "{{ build_dir }}/pkg_build"
+      become: true
+      become_user: "{{ build_user }}"
+      when: not local_pkg_stat.stat.exists
+
+    - name: Move built package to root build folder
+      ansible.builtin.command:
+        cmd: "mv {{ build_dir }}/pkg_build/{{ pkg_file_name }} {{ build_dir }}/{{ pkg_file_name }}"
+      when: not local_pkg_stat.stat.exists
+
+
+# =============================================================================
+# PART 2: Distribute and Install Package on CachyOS Cluster Nodes
+# =============================================================================
+- name: Distribute and Install Elasticsearch Package on Cluster
+  hosts: cluster_nodes
+  become: true
+
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    build_dir: "{{ project_root }}/build/elasticsearch"
+    pkg_file_name: "elasticsearch-{{ elk_version }}-1-x86_64.pkg.tar.zst"
+    remote_pkg_path: "/tmp/{{ pkg_file_name }}"
+
+  tasks:
+    - name: Check if Elasticsearch is already installed on host
+      ansible.builtin.command:
+        cmd: "pacman -Q elasticsearch"
+      register: pacman_check
+      failed_when: false
+      changed_when: false
+
+    - name: Copy package to remote hosts if not yet installed
+      ansible.builtin.copy:
+        src: "{{ build_dir }}/{{ pkg_file_name }}"
+        dest: "{{ remote_pkg_path }}"
+        mode: '0644'
+      when: pacman_check.rc != 0
+
+    - name: Ensure elasticsearch group exists
+      ansible.builtin.group:
+        name: elasticsearch
+        state: present
+        system: true
+
+    - name: Ensure elasticsearch user exists
+      ansible.builtin.user:
+        name: elasticsearch
+        group: elasticsearch
+        home: /usr/share/elasticsearch
+        shell: /usr/bin/nologin
+        system: true
+        state: present
+
+    - name: Install Elasticsearch package via pacman
+      community.general.pacman:
+        name: "{{ remote_pkg_path }}"
+        state: present
+      when: pacman_check.rc != 0
+
+    - name: Ensure correct ownership on Elasticsearch directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: elasticsearch
+        group: elasticsearch
+        state: directory
+        recurse: true
+      loop:
+        - /etc/elasticsearch
+        - /var/lib/elasticsearch
+        - /var/log/elasticsearch
+
+    - name: Clean up temporary package file on remote node
+      ansible.builtin.file:
+        path: "{{ remote_pkg_path }}"
+        state: absent
