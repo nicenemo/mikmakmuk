@@ -1,6 +1,3 @@
-Here is the updated `README.md` reflecting your actual directory contents (`controller-setup.yml`, `controller-teardown.yml`, etc.) and ordering teardown before setup to emphasize idempotency testing.
-
-```markdown
 # The Mik Mak Muk Cluster
 
 This repository provides the baseline Ansible automation for a 3-node HP EliteDesk/ProDesk Mini cluster (`mik`, `mak`, `muk`).
