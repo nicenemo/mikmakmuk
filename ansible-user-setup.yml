@@ -1,20 +1,5 @@
-#!/usr/bin/env -S sh -c 'ANSIBLE_SSH_CONTROL_PATH=none exec ansible-playbook "$0" "$@"'
+#!/usr/bin/env ansible-playbook
 ---
-- name: Prepare Control Node
-  hosts: localhost
-  connection: local
-  gather_facts: false
-
-  tasks:
-    - name: Ensure dedicated SSH key exists on control node
-      community.crypto.openssh_keypair:
-        path: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519_ansible"
-        type: ed25519
-        owner: "{{ lookup('env', 'USER') }}"
-        group: "{{ lookup('env', 'USER') }}"
-        mode: '0600'
-        regenerate: full_idempotence
-
 - name: Bootstrap Managed Nodes
   hosts: all
   gather_facts: false

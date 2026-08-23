@@ -1,4 +1,4 @@
-#!/usr/bin/env -S sh -c 'ANSIBLE_SSH_CONTROL_PATH=none exec ansible-playbook "$0" "$@"'
+#!/usr/bin/env ansible-playbook
 ---
 - name: Remove Managed Node Ansible User
   hosts: all
@@ -23,17 +23,3 @@
 
     - name: Flush SSH connections
       ansible.builtin.meta: reset_connection
-
-- name: Clean Control Node Key
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  become: false
-  tasks:
-    - name: Remove dedicated Ansible SSH private and public key from controller
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519_ansible"
-        - "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519_ansible.pub"

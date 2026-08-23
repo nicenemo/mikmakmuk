@@ -1,0 +1,19 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Clean Controller SSH Key
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    ssh_dir: "{{ lookup('env', 'HOME') }}/.ssh"
+    key_path: "{{ ssh_dir }}/id_ed25519_ansible"
+
+  tasks:
+    - name: Remove dedicated Ansible SSH keypair files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ key_path }}"
+        - "{{ key_path }}.pub"

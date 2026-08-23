@@ -1,0 +1,26 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Prepare Controller SSH Key
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    ssh_dir: "{{ lookup('env', 'HOME') }}/.ssh"
+    key_path: "{{ ssh_dir }}/id_ed25519_ansible"
+
+  tasks:
+    - name: Ensure SSH directory exists with restricted permissions
+      ansible.builtin.file:
+        path: "{{ ssh_dir }}"
+        state: directory
+        mode: '0700'
+
+    - name: Generate dedicated unencrypted ED25519 keypair
+      community.crypto.openssh_keypair:
+        path: "{{ key_path }}"
+        type: ed25519
+        comment: "ansible-automation@{{ lookup('env', 'HOSTNAME') | default('controller', true) }}"
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
+        mode: '0600'
