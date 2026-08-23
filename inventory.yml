@@ -10,6 +10,11 @@ all:
       - btop
       - wget
       - networkmanager
+    # Root CA lifetime (10 years)
+    ca_valid_days: 3650
+    # Browser leaf limit default (200 days)
+    leaf_valid_days: 200
+
     elk_version: 9.5.0
 
   children:
@@ -42,14 +47,14 @@ all:
             - elasticsearch_node
             - kibana_node
 
-        muk:
-          ansible_host: 192.168.105.4
-          ram_gb: 16
-          cpu_type: 8500T
-          node_packages:
-            - iotop
-            - duf
-
-          elasticsearch_ip: 192.168.105.230/24
-          cluster_roles:
-            - elasticsearch_node
+#        muk:
+#          ansible_host: 192.168.105.4
+#          ram_gb: 16
+#          cpu_type: 8500T
+#          node_packages:
+#            - iotop
+#            - duf
+#
+#          elasticsearch_ip: 192.168.105.230/24
+#          cluster_roles:
+#            - elasticsearch_node

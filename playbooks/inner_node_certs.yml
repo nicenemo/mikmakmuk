@@ -1,0 +1,41 @@
+---
+- name: Build SAN IP list for {{ node_name }}
+  ansible.builtin.set_fact:
+    node_ips: >-
+      {{
+        [hostvars[node_name]['ansible_host']] +
+        [hostvars[node_name]['elasticsearch_ip'].split('/')[0]] +
+        ([hostvars[node_name]['kibana_ip'].split('/')[0]] if hostvars[node_name]['kibana_ip'] is defined else [])
+      }}
+
+- name: Format SAN IPs for OpenSSL module
+  ansible.builtin.set_fact:
+    node_san_list: "{{ node_ips | map('regex_replace', '^', 'IP:') | list }}"
+
+- name: Generate Private Key for {{ node_name }}
+  community.crypto.openssl_privatekey:
+    path: "{{ cert_dir }}/{{ node_name }}.key"
+    type: RSA
+    size: 2048
+    mode: '0644'
+    owner: "{{ real_user }}"
+    force: false
+
+- name: Generate CSR for {{ node_name }}
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ cert_dir }}/{{ node_name }}.key"
+    common_name: "{{ node_name }}"
+    subject_alt_name: "{{ node_san_list }}"
+  register: node_csr
+
+- name: Write Leaf Certificate directly to file for {{ node_name }}
+  community.crypto.x509_certificate:
+    path: "{{ cert_dir }}/{{ node_name }}.crt"
+    csr_content: "{{ node_csr.csr }}"
+    ownca_path: "{{ cert_dir }}/ca.crt"
+    ownca_privatekey_path: "{{ cert_dir }}/ca.key"
+    provider: ownca
+    ownca_not_after: "+{{ hostvars['localhost']['leaf_valid_days'] | default(200) }}d"
+    mode: '0644'
+    owner: "{{ real_user }}"
+    force: false

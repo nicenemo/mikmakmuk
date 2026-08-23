@@ -1,0 +1,176 @@
+#!/usr/bin/env ansible-playbook
+---
+# =============================================================================
+# PART 1: Generate Root CA and Per-Node Certificates Locally
+# =============================================================================
+- name: Generate Local Root CA & Node Certificates
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+    real_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['env']['USER']) | default(ansible_facts['user_id']) }}"
+
+  tasks:
+    - name: Ensure local certificates directory exists
+      ansible.builtin.file:
+        path: "{{ cert_dir }}"
+        state: directory
+        mode: '0700'
+        owner: "{{ real_user }}"
+
+    # -------------------------------------------------------------------------
+    # 1. Dynamically Detect Localization-Aware Desktop Path
+    # -------------------------------------------------------------------------
+    - name: Get localized Desktop directory path via xdg-user-dir
+      ansible.builtin.command:
+        cmd: "xdg-user-dir DESKTOP"
+      become: true
+      become_user: "{{ real_user }}"
+      register: xdg_desktop_cmd
+      changed_when: false
+      failed_when: false
+
+    - name: Set desktop_dir fact with fallback
+      ansible.builtin.set_fact:
+        desktop_dir: "{{ xdg_desktop_cmd.stdout if (xdg_desktop_cmd.stdout | length > 0) else ('/home/' ~ real_user ~ '/Desktop') }}"
+
+    # -------------------------------------------------------------------------
+    # 2. Create Root CA Directly on Disk
+    # -------------------------------------------------------------------------
+    - name: Generate Root CA Private Key
+      community.crypto.openssl_privatekey:
+        path: "{{ cert_dir }}/ca.key"
+        type: RSA
+        size: 4096
+        force: false
+
+    - name: Generate Root CA CSR
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: "{{ cert_dir }}/ca.key"
+        common_name: "Internal ELK Root CA"
+        basic_constraints:
+          - "CA:TRUE"
+        basic_constraints_critical: true
+        key_usage:
+          - keyCertSign
+          - cRLSign
+      register: ca_csr
+
+    - name: Write Root CA Certificate directly to file
+      community.crypto.x509_certificate:
+        path: "{{ cert_dir }}/ca.crt"
+        csr_content: "{{ ca_csr.csr }}"
+        privatekey_path: "{{ cert_dir }}/ca.key"
+        provider: selfsigned
+        selfsigned_not_after: "+{{ hostvars['localhost']['ca_valid_days'] | default(3650) }}d"
+        force: false
+
+    # -------------------------------------------------------------------------
+    # 3. Copy CA to Desktop & Controller Trust Store
+    # -------------------------------------------------------------------------
+    - name: Copy CA certificate to localized Desktop directory
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/ca.crt"
+        dest: "{{ desktop_dir }}/ELK_Internal_CA.crt"
+        mode: '0644'
+        owner: "{{ real_user }}"
+        remote_src: true
+
+    - name: Install CA certificate into Controller system trust (CachyOS/Arch)
+      become: true
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/ca.crt"
+        dest: "/etc/ca-certificates/trust-source/anchors/ELK_Internal_CA.crt"
+        mode: '0644'
+        remote_src: true
+      notify: Update controller trust store
+
+    # -------------------------------------------------------------------------
+    # 4. Generate Node Certificates via Inner Loop
+    # -------------------------------------------------------------------------
+    - name: Process per-node certificates
+      ansible.builtin.include_tasks: inner_node_certs.yml
+      loop: "{{ groups['cluster_nodes'] }}"
+      loop_control:
+        loop_var: node_name
+
+  handlers:
+    - name: Update controller trust store
+      become: true
+      ansible.builtin.command:
+        cmd: "update-ca-trust"
+      changed_when: true
+
+
+# =============================================================================
+# PART 2: Distribute Certificates & Trust Store to Cluster Nodes
+# =============================================================================
+- name: Push Certificates to Nodes and Update System Trust Stores
+  hosts: cluster_nodes
+  become: true
+
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+
+  tasks:
+    - name: Ensure target cert directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0750'
+      loop:
+        - /etc/elasticsearch/certs
+        - /etc/kibana/certs
+
+    - name: Push CA certificate to Elasticsearch and Kibana paths
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/ca.crt"
+        dest: "{{ item }}/ca.crt"
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0644'
+      loop:
+        - /etc/elasticsearch/certs
+        - /etc/kibana/certs
+
+    - name: Push node private key and certificate to Elasticsearch
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/{{ inventory_hostname }}.{{ item }}"
+        dest: "/etc/elasticsearch/certs/node.{{ item }}"
+        owner: elasticsearch
+        group: elasticsearch
+        mode: "{{ '0600' if item == 'key' else '0644' }}"
+      loop:
+        - key
+        - crt
+
+    - name: Push node key/crt to Kibana folder if kibana_node
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/{{ inventory_hostname }}.{{ item }}"
+        dest: "/etc/kibana/certs/node.{{ item }}"
+        owner: elasticsearch
+        group: elasticsearch
+        mode: "{{ '0600' if item == 'key' else '0644' }}"
+      loop:
+        - key
+        - crt
+      when: "'kibana_node' in cluster_roles"
+
+    - name: Install CA into node CachyOS trust store
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/ca.crt"
+        dest: "/etc/ca-certificates/trust-source/anchors/ELK_Internal_CA.crt"
+        mode: '0644'
+      notify: Update node trust store
+
+  handlers:
+    - name: Update node trust store
+      ansible.builtin.command:
+        cmd: "update-ca-trust"
+      changed_when: true
