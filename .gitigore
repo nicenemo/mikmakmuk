@@ -62,7 +62,7 @@ collections/
 # CachyOs
 # ==========================================
 # package builds
-build/
+build/**/*
 
 # ==========================================
 # Markdown
