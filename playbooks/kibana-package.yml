@@ -1,0 +1,66 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Build CachyOS Kibana Package.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    # Fetches elk_version from inventory.yml (defaults to 9.5.3 if undefined)
+    target_version: "{{ hostvars[groups['cluster_nodes'][0]]['elk_version'] if (groups['cluster_nodes'] is defined and hostvars[groups['cluster_nodes'][0]]['elk_version'] is defined) else '9.5.3' }}"
+    build_user: "{{ lookup('env', 'SUDO_USER') | default(lookup('env', 'USER'), true) }}"
+
+  tasks:
+    - name: Set resolved version fact
+      ansible.builtin.set_fact:
+        resolved_elk_version: "{{ target_version }}"
+    - name: Display active ELK version
+      ansible.builtin.debug:
+        msg: "Kibana version to package: {{ resolved_elk_version }}"
+    - name: Set path facts for local build
+      ansible.builtin.set_fact:
+        build_dir: "{{ project_root }}/build/kibana"
+        pkg_file_name: "kibana-{{ resolved_elk_version }}-1-x86_64.pkg.tar.zst"
+    - name: Check if CachyOS package already exists locally
+      ansible.builtin.stat:
+        path: "{{ build_dir }}/{{ pkg_file_name }}"
+      register: local_pkg_stat
+    - name: Ensure build and pkg_build directories exist and are owned by standard user
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ build_user }}"
+        group: "{{ build_user }}"
+        mode: '0755'
+      loop:
+        - "{{ build_dir }}"
+        - "{{ build_dir }}/pkg_build"
+    - name: Ensure build directories are owned by standard user recursively
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        owner: "{{ build_user }}"
+        group: "{{ build_user }}"
+        recurse: true
+    - name: Generate PKGBUILD file from template
+      ansible.builtin.template:
+        src: "{{ project_root }}/templates/kibana-pkg/PKGBUILD.j2"
+        dest: "{{ build_dir }}/pkg_build/PKGBUILD"
+        mode: '0644'
+      vars:
+        kibana_version: "{{ resolved_elk_version }}"
+    - name: Copy downloaded tarball to pkg_build directory
+      ansible.builtin.copy:
+        src: "{{ build_dir }}/kibana-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+        dest: "{{ build_dir }}/pkg_build/kibana-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+      when: not local_pkg_stat.stat.exists
+    - name: Build CachyOS package using makepkg as unprivileged user
+      ansible.builtin.command:
+        cmd: "makepkg -f --nodeps"
+        chdir: "{{ build_dir }}/pkg_build"
+      become: true
+      become_user: "{{ build_user }}"
+      when: not local_pkg_stat.stat.exists
+    - name: Move built package to root build folder
+      ansible.builtin.command:
+        cmd: "mv {{ build_dir }}/pkg_build/{{ pkg_file_name }} {{ build_dir }}/{{ pkg_file_name }}"
+      when: not local_pkg_stat.stat.exists

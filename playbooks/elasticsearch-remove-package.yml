@@ -1,0 +1,18 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Remove arch Elasticsearch package file from  cluster nodes.
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    build_dir: "{{ project_root }}/build/elasticsearch"
+    pkg_file_name: "elasticsearch-{{ elk_version }}-1-x86_64.pkg.tar.zst"
+    remote_pkg_path: "/tmp/{{ pkg_file_name }}"
+  tasks:
+    - name: End play for nodes without the elasticsearch_node role
+      ansible.builtin.meta: end_host
+      when: "'elasticsearch_node' not in (cluster_roles | default([]))"
+    - name: Clean up temporary package file on remote node
+      ansible.builtin.file:
+        path: "{{ remote_pkg_path }}"
+        state: absent

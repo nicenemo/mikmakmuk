@@ -1,0 +1,105 @@
+---
+# -----------------------------------------------------------------------------
+# 1. Extract Target IPs & Discover ALL Dynamic DNS Hostnames/Aliases
+# -----------------------------------------------------------------------------
+- name: Build SAN IP list for {{ node_name }}
+  ansible.builtin.set_fact:
+    node_ips: >-
+      {{
+        [hostvars[node_name]['ansible_host']] +
+        ([hostvars[node_name]['elasticsearch_ip'].split('/')[0]] if hostvars[node_name]['elasticsearch_ip'] is defined else []) +
+        ([hostvars[node_name]['kibana_ip'].split('/')[0]] if hostvars[node_name]['kibana_ip'] is defined else [])
+      }}
+
+- name: Extract primary IP for DNS lookup
+  ansible.builtin.set_fact:
+    primary_ip: "{{ node_ips[0] }}"
+
+# 1. Standaard PTR lookup
+- name: Perform reverse PTR DNS lookup for primary IP
+  ansible.builtin.command:
+    cmd: "dig +short -x {{ primary_ip }}"
+  register: ptr_lookup
+  changed_when: false
+  failed_when: false
+
+# 2. Vraag Unbound/DNS om ALLE records die naar dit IP-adres linken
+- name: Discover all A, PTR and CNAME DNS names pointing to node IP via local DNS
+  ansible.builtin.shell: |
+    dig +noall +answer -x {{ primary_ip }} ANY | awk '{print $5}' | sed 's/\.$//'
+  register: discovered_dns_raw
+  changed_when: false
+  failed_when: false
+
+# 3. Filter alleen de DYNAMISCH ontdekte DNS-namen via Regex
+- name: Filter discovered DNS names
+  ansible.builtin.set_fact:
+    discovered_dns_names: >-
+      {{
+        (ptr_lookup.stdout_lines + discovered_dns_raw.stdout_lines)
+        | flatten
+        | select('match', '(?i)^[a-z0-9.-]+\\.[a-z]{2,}\\.?$')
+        | map('regex_replace', '\\.$', '')
+        | unique
+        | list
+      }}
+
+# 4. Haal de expliciete custom_sans op uit de inventory (zonder te filteren op DNS-regex)
+- name: Extract inventory custom SANs for {{ node_name }}
+  ansible.builtin.set_fact:
+    inventory_sans: "{{ hostvars[node_name]['custom_sans'] | default([]) }}"
+
+# 5. Voeg alles samen
+- name: Combine all DNS names for {{ node_name }}
+  ansible.builtin.set_fact:
+    all_dns_names: "{{ (discovered_dns_names + inventory_sans) | unique | list }}"
+
+# -----------------------------------------------------------------------------
+# 2. Format SAN Entry List (DNS & IP)
+# -----------------------------------------------------------------------------
+- name: Format SAN entries for OpenSSL module
+  ansible.builtin.set_fact:
+    node_san_list: >-
+      {{
+        ['DNS:' ~ node_name, 'DNS:localhost', 'IP:127.0.0.1'] +
+        (all_dns_names | map('regex_replace', '^', 'DNS:') | list) +
+        (node_ips | map('regex_replace', '^', 'IP:') | list)
+      | unique }}
+
+- name: Display generated SANs for {{ node_name }}
+  ansible.builtin.debug:
+    msg: "Gegenereerde SAN-lijst voor {{ node_name }}: {{ node_san_list }}"
+
+# -----------------------------------------------------------------------------
+# 3. Generate Keys & Certificates
+# -----------------------------------------------------------------------------
+- name: Generate Private Key for {{ node_name }} (PKCS#8 for Java/ES)
+  community.crypto.openssl_privatekey:
+    path: "{{ cert_dir }}/{{ node_name }}.key"
+    type: RSA
+    size: 2048
+    format: pkcs8
+    mode: '0600'
+    owner: "{{ real_user }}"
+    force: false
+
+- name: Generate CSR for {{ node_name }}
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ cert_dir }}/{{ node_name }}.key"
+    common_name: "{{ node_name }}"
+    organization_name: "{{ cert_organization | default(hostvars['localhost']['cert_organization'] | default('Vogon Interplanetary Delay-Tolerant Network Bureau (RFC 9171)')) }}"
+    organizational_unit_name: "{{ cert_organizational_unit | default(hostvars['localhost']['cert_organizational_unit'] | default('Department of Directing WireGuard-over-BLE HID Service 0x1812 Tunneling via Page 0x20 (HUD) over hid-ebpf via DTN Bundle Store-and-Forward to a Closed Window')) }}"
+    subject_alt_name: "{{ node_san_list }}"
+  register: node_csr
+
+- name: Write Leaf Certificate directly to file for {{ node_name }}
+  community.crypto.x509_certificate:
+    path: "{{ cert_dir }}/{{ node_name }}.crt"
+    csr_content: "{{ node_csr.csr }}"
+    ownca_path: "{{ cert_dir }}/ca.crt"
+    ownca_privatekey_path: "{{ cert_dir }}/ca.key"
+    provider: ownca
+    ownca_not_after: "+{{ hostvars['localhost']['leaf_valid_days'] | default(200) }}d"
+    mode: '0644'
+    owner: "{{ real_user }}"
+    force: false

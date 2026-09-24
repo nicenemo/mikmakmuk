@@ -1,0 +1,176 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Configure Elasticsearch Cluster.
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    # Generates a random password locally on control machine; reuses existing value if present
+    es_elastic_password: "{{ lookup('ansible.builtin.password', project_root ~ '/credentials/elastic_password.txt length=24 chars=ascii_letters,digits') }}"
+
+  tasks:
+    - name: End play for nodes without the elasticsearch_node role
+      ansible.builtin.meta: end_host
+      when: "'elasticsearch_node' not in (cluster_roles | default([]))"
+
+    - name: Allow Elasticsearch Transport port (9300) strictly from cluster peers
+      community.general.ufw:
+        rule: allow
+        port: '9300'
+        proto: tcp
+        from_ip: "{{ (hostvars[item]['elasticsearch_ip'] | default(hostvars[item]['ansible_host'])).split('/')[0] }}"
+        comment: "ES Transport from {{ item }}"
+      loop: "{{ groups['cluster_nodes'] }}"
+
+    - name: Allow Elasticsearch HTTP REST API (9200) from anywhere
+      community.general.ufw:
+        rule: allow
+        port: '9200'
+        proto: tcp
+        comment: "ES REST API"
+
+    - name: Enable UFW state
+      community.general.ufw:
+        state: enabled
+
+    - name: Ensure UFW systemd service is active and enabled at boot
+      ansible.builtin.systemd:
+        name: ufw
+        enabled: true
+        state: started
+
+    - name: Check if Elasticsearch node data is initialized
+      ansible.builtin.stat:
+        path: /usr/share/elasticsearch/data/nodes
+      register: es_data_state
+
+    - name: Ensure configuration directory exists
+      ansible.builtin.file:
+        path: /etc/elasticsearch
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0750'
+
+    - name: Ensure JVM options drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/elasticsearch/jvm.options.d
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0750'
+
+    - name: Deploy JVM heap options configuration
+      ansible.builtin.template:
+        src: "{{ project_root }}/templates/jvm_heap.options.j2"
+        dest: /etc/elasticsearch/jvm.options.d/heap.options
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0640'
+      notify: Restart Elasticsearch
+
+    - name: Deploy Elasticsearch configuration template
+      ansible.builtin.template:
+        src: "{{ project_root }}/templates/elasticsearch.yml.j2"
+        dest: /etc/elasticsearch/elasticsearch.yml
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0660'
+      vars:
+        node_is_bootstrapped: "{{ es_data_state.stat.exists | default(false) }}"
+      notify: Restart Elasticsearch
+
+    - name: Ensure correct ownership on Elasticsearch directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: elasticsearch
+        group: elasticsearch
+        state: directory
+        recurse: true
+      loop:
+        - /etc/elasticsearch
+        - /var/lib/elasticsearch
+        - /var/log/elasticsearch
+
+    - name: Enable and start Elasticsearch service
+      ansible.builtin.systemd:
+        name: elasticsearch
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Flush handlers to ensure Elasticsearch service restart is processed
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for Elasticsearch REST API (9200) to start listening
+      ansible.builtin.wait_for:
+        host: "{{ (hostvars[inventory_hostname]['elasticsearch_ip'] | default(ansible_host)).split('/')[0] }}"
+        port: 9200
+        state: started
+        delay: 5
+        timeout: 60
+
+    - name: Check if generated elastic password is already active
+      ansible.builtin.uri:
+        url: "https://{{ (hostvars[inventory_hostname]['elasticsearch_ip'] | default(ansible_host)).split('/')[0] }}:9200/_cluster/health"
+        user: elastic
+        password: "{{ es_elastic_password }}"
+        validate_certs: false
+        status_code: [200]
+      register: es_auth_check
+      ignore_errors: true
+      run_once: true
+      no_log: true
+
+    - name: Set elastic user password on cluster
+      ansible.builtin.shell: >
+        printf "%s\n%s\n" "{{ es_elastic_password }}" "{{ es_elastic_password }}" |
+        /usr/share/elasticsearch/bin/elasticsearch-reset-password
+        --username elastic
+        --url "https://{{ (hostvars[inventory_hostname]['elasticsearch_ip'] | default(ansible_host)).split('/')[0] }}:9200"
+        --interactive
+        --batch
+      when: es_auth_check.status != 200
+      run_once: true
+      no_log: true
+
+    # -------------------------------------------------------------------------
+    # Cluster-Wide Health Verification
+    # -------------------------------------------------------------------------
+    - name: Verify Elasticsearch cluster health endpoint on each node
+      ansible.builtin.uri:
+        url: "https://{{ (hostvars[inventory_hostname]['elasticsearch_ip'] | default(ansible_host)).split('/')[0] }}:9200/_cluster/health"
+        method: GET
+        user: elastic
+        password: "{{ es_elastic_password }}"
+        validate_certs: false
+        status_code: [200]
+      register: es_health_check
+      until: es_health_check.status == 200
+      retries: 24
+      delay: 5
+      no_log: true
+
+    - name: Display active elastic password and cluster health status
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "Elasticsearch Node {{ inventory_hostname }} is HEALTHY!"
+          - "Cluster Status: {{ es_health_check.json.status }}"
+          - "Number of Nodes: {{ es_health_check.json.number_of_nodes }}"
+          - ""
+          - "Elasticsearch 'elastic' user password:"
+          - "  {{ es_elastic_password }}"
+          - ""
+          - "Stored locally on control machine at:"
+          - "  {{ project_root }}/credentials/elastic_password.txt"
+          - ""
+          - "Test command (copy-paste directly in ANY shell):"
+          - "  curl -k -u elastic:{{ es_elastic_password }} https://{{ (hostvars[inventory_hostname]['elasticsearch_ip'] | default(ansible_host)).split('/')[0] }}:9200/_cluster/health?pretty"
+          - "=========================================================="
+
+  handlers:
+    - name: Restart Elasticsearch
+      ansible.builtin.systemd:
+        name: elasticsearch
+        state: restarted

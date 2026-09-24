@@ -1,0 +1,74 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Distribute and Install Kibana Package
+  hosts: cluster_nodes
+  become: true
+
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    build_dir: "{{ project_root }}/build/kibana"
+    pkg_file_name: "kibana-{{ elk_version | default('9.5.4') }}-1-x86_64.pkg.tar.zst"
+    remote_pkg_path: "/tmp/{{ pkg_file_name }}"
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Early exit check: Skip execution for non-Kibana nodes
+    # -------------------------------------------------------------------------
+    - name: End play for nodes without the kibana_node role
+      ansible.builtin.meta: end_host
+      when: "'kibana_node' not in (cluster_roles | default([]))"
+
+    # -------------------------------------------------------------------------
+    # 2. Package & Service Installation (runs ONLY on Kibana nodes)
+    # -------------------------------------------------------------------------
+    - name: Check if Kibana is already installed on host
+      ansible.builtin.command:
+        cmd: "pacman -Q kibana"
+      register: pacman_check
+      failed_when: false
+      changed_when: false
+
+    - name: Copy package to remote host if not yet installed
+      ansible.builtin.copy:
+        src: "{{ build_dir }}/{{ pkg_file_name }}"
+        dest: "{{ remote_pkg_path }}"
+        mode: '0644'
+      when: pacman_check.rc != 0
+
+    - name: Ensure kibana group exists
+      ansible.builtin.group:
+        name: kibana
+        state: present
+        system: true
+
+    - name: Ensure kibana user exists
+      ansible.builtin.user:
+        name: kibana
+        group: kibana
+        home: /usr/share/kibana
+        shell: /usr/bin/nologin
+        system: true
+        state: present
+
+    - name: Install Kibana package via pacman
+      community.general.pacman:
+        name: "{{ remote_pkg_path }}"
+        state: present
+      when: pacman_check.rc != 0
+
+    - name: Ensure correct ownership on Kibana directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: kibana
+        group: kibana
+        state: directory
+        mode: '0750'
+      loop:
+        - /etc/kibana
+        - /var/lib/kibana
+        - /var/log/kibana
+
+    - name: Clean up temporary package file on remote host
+      ansible.builtin.file:
+        path: "{{ remote_pkg_path }}"
+        state: absent

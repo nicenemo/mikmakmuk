@@ -1,0 +1,58 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Uninstall Kibana from Cluster Nodes.
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+
+  tasks:
+    - name: End play for nodes without the kibana_node role
+      ansible.builtin.meta: end_host
+      when: "'kibana_node' not in (cluster_roles | default([]))"
+    - name: Ensure Kibana service is stopped and disabled
+      ansible.builtin.systemd:
+        name: kibana
+        state: stopped
+        enabled: false
+      failed_when: false
+    - name: Remove Kibana firewall rule (port 5601)
+      community.general.ufw:
+        rule: allow
+        port: '5601'
+        proto: tcp
+        delete: true
+      failed_when: false
+    - name: Uninstall Kibana package via pacman
+      community.general.pacman:
+        name: kibana
+        state: absent
+    - name: Remove Kibana configuration, log, data, systemd overrides, and installation directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kibana
+        - /var/lib/kibana
+        - /var/log/kibana
+        - /usr/share/kibana
+        - /etc/systemd/system/kibana.service.d
+    - name: Remove kibana user
+      ansible.builtin.user:
+        name: kibana
+        state: absent
+        remove: true
+    - name: Remove kibana group
+      ansible.builtin.group:
+        name: kibana
+        state: absent
+    - name: Remove local Kibana service token and encryption key credentials
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      run_once: true
+      loop:
+        - "{{ project_root }}/credentials/kibana_service_token.txt"
+        - "{{ project_root }}/credentials/kibana_encryption_key.txt"

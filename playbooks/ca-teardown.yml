@@ -1,0 +1,70 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Purge CA Certificate from Cluster Nodes System Trust Store
+  hosts: cluster_nodes
+  become: true
+  tasks:
+    - name: Check if CA exists in node trust store
+      ansible.builtin.stat:
+        path: "/etc/ca-certificates/trust-source/anchors/ELK_Internal_CA.crt"
+      register: node_ca_stat
+    - name: Remove CA from node CachyOS trust store
+      ansible.builtin.file:
+        path: "/etc/ca-certificates/trust-source/anchors/ELK_Internal_CA.crt"
+        state: absent
+      notify: Update node trust store
+      when: node_ca_stat.stat.exists
+  handlers:
+    - name: Update node trust store
+      ansible.builtin.command:
+        cmd: "update-ca-trust"
+      changed_when: true
+- name: Clean Up Local Root CA and Controller Trust Store
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+    real_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['env']['USER']) | default(ansible_facts['user_id']) }}"
+  tasks:
+    - name: Get localized Desktop directory path via xdg-user-dir
+      ansible.builtin.command:
+        cmd: "xdg-user-dir DESKTOP"
+      become: true
+      become_user: "{{ real_user }}"
+      register: xdg_desktop_cmd
+      changed_when: false
+      failed_when: false
+    - name: Set desktop_dir fact with fallback
+      ansible.builtin.set_fact:
+        desktop_dir: "{{ xdg_desktop_cmd.stdout if (xdg_desktop_cmd.stdout | length > 0) else ('/home/' ~ real_user ~ '/Desktop') }}"
+    - name: Remove local CA key and certificate
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ cert_dir }}/ca.key"
+        - "{{ cert_dir }}/ca.crt"
+    - name: Remove CA certificate from Desktop
+      ansible.builtin.file:
+        path: "{{ desktop_dir }}/ELK_Internal_CA.crt"
+        state: absent
+    - name: Check if CA exists in Controller trust store
+      become: true
+      ansible.builtin.stat:
+        path: "/etc/ca-certificates/trust-source/anchors/ELK_Internal_CA.crt"
+      register: controller_ca_stat
+    - name: Remove CA from Controller system trust store
+      become: true
+      ansible.builtin.file:
+        path: "/etc/ca-certificates/trust-source/anchors/ELK_Internal_CA.crt"
+        state: absent
+      notify: Update controller trust store
+      when: controller_ca_stat.stat.exists
+  handlers:
+    - name: Update controller trust store
+      become: true
+      ansible.builtin.command:
+        cmd: "update-ca-trust"
+      changed_when: true

@@ -1,0 +1,45 @@
+# =============================================================================
+# Kibana Server Configuration
+# =============================================================================
+server.port: 5601
+server.host: "{{ (hostvars[inventory_hostname]['kibana_ip'] | default(ansible_host)).split('/')[0] }}"
+
+# Inbound HTTPS Configuration
+server.ssl.enabled: true
+server.ssl.certificate: "/etc/kibana/certs/{{ inventory_hostname }}.crt"
+server.ssl.key: "/etc/kibana/certs/{{ inventory_hostname }}.key"
+
+# Public URL
+server.publicBaseUrl: "https://{{ (hostvars[inventory_hostname]['kibana_ip'] | default(ansible_host)).split('/')[0] }}:5601"
+
+# Security & Encrypted Saved Objects (Fixes Fleet setup error)
+xpack.encryptedSavedObjects.encryptionKey: "{{ kibana_encryption_key }}"
+
+# =============================================================================
+# Elasticsearch Connection & TLS Configuration
+# =============================================================================
+elasticsearch.hosts:
+{% for node in groups['cluster_nodes'] %}
+{% if 'elasticsearch_node' in (hostvars[node]['cluster_roles'] | default([])) %}
+  - "https://{{ (hostvars[node]['elasticsearch_ip'] | default(hostvars[node]['ansible_host'])).split('/')[0] }}:9200"
+{% endif %}
+{% endfor %}
+
+elasticsearch.serviceAccountToken: "{{ kibana_service_token }}"
+
+# Strict TLS Trust Verification using internal Root CA
+elasticsearch.ssl.certificateAuthorities: [ "/etc/kibana/certs/ca.crt" ]
+elasticsearch.ssl.verificationMode: full
+
+# ============================================================================
+# Logging Configuration
+# =============================================================================
+logging:
+  appenders:
+    file:
+      type: file
+      fileName: /var/log/kibana/kibana.log
+      layout:
+        type: json
+  root:
+    appenders: [default, file]

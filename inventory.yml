@@ -10,6 +10,24 @@ all:
       - btop
       - wget
       - networkmanager
+    ca_valid_days: 3650
+    leaf_valid_days: 200
+    # You might want to change geeky this example
+    cert_organization: "Vogon Deep-Space Avian & DTN Transit Board (RFC 1149 / RFC 9171)"
+    # You certainly want to change this violation of the Wassenaar agreements ;)
+    cert_organizational_unit: "Office for Directing DTN Bundle Custody Transfers of WireGuard-over-BLE HID Service 0x1812 Page 0x20 (HUD) over hid-ebpf to the Outer Rim"
+    # Right, who made this up?
+    cert_root_ca_cn: "B.I.R.D. (BIRD Interstellar Recursive Defenestration) Root CA"
+    elk_version: 9.5.4
+
+    # =========================================================================
+    # Memory Sizing Defaults
+    # =========================================================================
+    # Dynamically sets ES heap to 50% of node RAM, capped at 31GB max / 1GB min
+    es_heap_size_gb: "{{ [ [ ((ansible_facts['memtotal_mb'] | default(ram_gb * 1024 if ram_gb is defined else 4096)) / 2 / 1024) | round(0, 'floor') | int, 31 ] | min, 1 ] | max }}"
+
+    # Kibana default limit in MB
+    kibana_memory_mb: 2048
 
   children:
     cluster_nodes:
@@ -22,6 +40,12 @@ all:
 #           - rsync
 #           - tree
 #           - tmux
+#         elasticsearch_ip: 192.168.105.210/24
+#         cluster_roles:
+#           - elasticsearch_node
+#         custom_sans:
+#           - es01.bird.internal
+
         mak:
           ansible_host: 192.168.105.3
           ram_gb: 32
@@ -29,6 +53,19 @@ all:
           node_packages:
             - htop
             - ncdu
+          elasticsearch_ip: 192.168.105.3/24
+          kibana_ip: 192.168.105.3/24
+          cluster_roles:
+            - elasticsearch_node
+            - kibana_node
+          custom_sans:
+            - kibana.bird.internal
+            - es02.bird.internal
+
+          # Optional per-node overrides (uncomment if you ever want to force explicit limits):
+          # es_heap_size_gb: 8
+          # kibana_memory_mb: 4096
+
 #       muk:
 #         ansible_host: 192.168.105.4
 #         ram_gb: 16
@@ -36,3 +73,8 @@ all:
 #         node_packages:
 #           - iotop
 #           - duf
+#         elasticsearch_ip: 192.168.105.230/24
+#         cluster_roles:
+#           - elasticsearch_node
+#         custom_sans:
+#           - es03.bird.internal

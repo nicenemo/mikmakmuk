@@ -59,6 +59,12 @@ collections/
 *.fact
 
 # ==========================================
+# CachyOs
+# ==========================================
+# package builds
+build/**/*
+
+# ==========================================
 # Markdown
 # ==========================================
 # HTML/PDF generation artifacts
@@ -68,3 +74,5 @@ collections/
 # Tooling caches (e.g., markdownlint)
 .markdownlint-cli2-cache
 build/
+certs/
+credentials/

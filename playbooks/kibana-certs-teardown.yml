@@ -1,0 +1,34 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Purge Certificates from Kibana Nodes.
+  hosts: cluster_nodes
+  become: true
+  tasks:
+    - name: End play for nodes without the kibana_node role
+      ansible.builtin.meta: end_host
+      when: "'kibana_node' not in (cluster_roles | default([]))"
+    - name: Remove Kibana certificate directory
+      ansible.builtin.file:
+        path: /etc/kibana/certs
+        state: absent
+- name: Remove Local Kibana Node Certificates on Controller.
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+  tasks:
+    - name: Remove local leaf keys and certificates for Kibana-only nodes
+      ansible.builtin.file:
+        path: "{{ cert_dir }}/{{ item }}.{{ ext }}"
+        state: absent
+      loop: "{{ query('nested', groups['cluster_nodes'], ['key', 'crt']) }}"
+      loop_control:
+        loop_var: node_item
+      vars:
+        item: "{{ node_item[0] }}"
+        ext: "{{ node_item[1] }}"
+      when:
+        - "'kibana_node' in (hostvars[node_item[0]]['cluster_roles'] | default([]))"
+        - "'elasticsearch_node' not in (hostvars[node_item[0]]['cluster_roles'] | default([]))"

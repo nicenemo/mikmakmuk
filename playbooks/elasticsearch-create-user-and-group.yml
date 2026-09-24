@@ -1,0 +1,61 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Distribute and Install Elasticsearch Package on Cluster.
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    build_dir: "{{ project_root }}/build/elasticsearch"
+    pkg_file_name: "elasticsearch-{{ elk_version }}-1-x86_64.pkg.tar.zst"
+    remote_pkg_path: "/tmp/{{ pkg_file_name }}"
+  tasks:
+    - name: End play for nodes without the elasticsearch_node role
+      ansible.builtin.meta: end_host
+      when: "'elasticsearch_node' not in (cluster_roles | default([]))"
+    - name: Check if Elasticsearch is already installed on host
+      ansible.builtin.command:
+        cmd: "pacman -Q elasticsearch"
+      register: pacman_check
+      failed_when: false
+      changed_when: false
+    - name: Copy package to remote hosts if not yet installed
+      ansible.builtin.copy:
+        src: "{{ build_dir }}/{{ pkg_file_name }}"
+        dest: "{{ remote_pkg_path }}"
+        mode: '0644'
+      when: pacman_check.rc != 0
+
+    - name: Ensure elasticsearch group exists
+      ansible.builtin.group:
+        name: elasticsearch
+        state: present
+        system: true
+    - name: Ensure elasticsearch user exists
+      ansible.builtin.user:
+        name: elasticsearch
+        group: elasticsearch
+        home: /usr/share/elasticsearch
+        shell: /usr/bin/nologin
+        system: true
+        state: present
+
+    - name: Install Elasticsearch package via pacman
+      community.general.pacman:
+        name: "{{ remote_pkg_path }}"
+        state: present
+      when: pacman_check.rc != 0
+    - name: Ensure correct ownership on Elasticsearch directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: elasticsearch
+        group: elasticsearch
+        state: directory
+        recurse: true
+      loop:
+        - /etc/elasticsearch
+        - /var/lib/elasticsearch
+        - /var/log/elasticsearch
+    - name: Clean up temporary package file on remote node
+      ansible.builtin.file:
+        path: "{{ remote_pkg_path }}"
+        state: absent

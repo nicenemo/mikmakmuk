@@ -8,13 +8,33 @@
     # -------------------------------------------------------------------------
     # 1. Package Management & Keyring Maintenance
     # -------------------------------------------------------------------------
-    - name: Update Arch and CachyOS keyrings first
-      community.general.pacman:
-        name:
-          - archlinux-keyring
-          - cachyos-keyring
-        state: latest
-        update_cache: true
+    - name: Initialize pacman keyring if missing or unpopulated
+      ansible.builtin.command:
+        cmd: pacman-key --init
+        creates: /etc/pacman.d/gnupg/trustdb.gpg
+
+    - name: Populate default Arch and CachyOS keyrings
+      ansible.builtin.command:
+        cmd: pacman-key --populate archlinux cachyos
+      changed_when: false
+
+    - name: Clean potentially corrupted pacman sync databases
+      ansible.builtin.file:
+        path: /var/lib/pacman/sync
+        state: absent
+
+    - name: Re-create pacman sync directory
+      ansible.builtin.file:
+        path: /var/lib/pacman/sync
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Force refresh pacman databases and update keyrings directly
+      ansible.builtin.command:
+        cmd: pacman -Sy --noconfirm archlinux-keyring cachyos-keyring
+      changed_when: true
 
     - name: Wipe pacman package cache directory
       ansible.builtin.file:
@@ -29,10 +49,11 @@
         group: root
         mode: '0755'
 
-    - name: Upgrade all system packages
-      community.general.pacman:
-        update_cache: true
-        upgrade: true
+    - name: Upgrade all system packages (including multilib sync)
+      ansible.builtin.command:
+        cmd: pacman -Syu --noconfirm
+      register: pacman_upgrade_result
+      changed_when: "'there is nothing to do' not in pacman_upgrade_result.stdout"
 
     - name: Install baseline hardware drivers and power management tooling
       community.general.pacman:
