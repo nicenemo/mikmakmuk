@@ -5,57 +5,38 @@
   become: true
 
   tasks:
-    # -------------------------------------------------------------------------
-    # 1. Stop Services & Clean Configuration Files First
-    # -------------------------------------------------------------------------
     - name: Stop and disable hardware management services
       ansible.builtin.systemd:
         name: powertop
         enabled: false
         state: stopped
       failed_when: false
-
     - name: Remove PowerTOP systemd service unit
       ansible.builtin.file:
         path: /etc/systemd/system/powertop.service
         state: absent
       notify: Reload systemd daemon teardown
-
     - name: Remove iGPU load module file
       ansible.builtin.file:
         path: /etc/modules-load.d/igpu.conf
         state: absent
-
     - name: Remove homelab cmdline kernel tuning configuration
       ansible.builtin.file:
         path: /etc/cmdline.d/homelab-tuning.conf
         state: absent
       notify: Regenerate initramfs teardown
-
-    # -------------------------------------------------------------------------
-    # 2. Package Removal (Inventory & Hardware Tools)
-    # -------------------------------------------------------------------------
-    - name: Remove common_packages and node_packages from inventory
+    - name: Remove common_packages and node_packages (excluding NetworkManager)
       community.general.pacman:
-        name: "{{ (common_packages | default([])) + (node_packages | default([])) }}"
+        name: "{{ ((common_packages | default([])) + (node_packages | default([]))) | reject('equalto', 'networkmanager') | list }}"
         state: absent
-
     - name: Remove standalone hardware and power tools
       community.general.pacman:
         name:
           - powertop
           - cpupower
         state: absent
-
-    # -------------------------------------------------------------------------
-    # 3. Flush Handlers
-    # -------------------------------------------------------------------------
     - name: Flush handlers
       ansible.builtin.meta: flush_handlers
-
-  # ---------------------------------------------------------------------------
-  # Handlers (Executed at end of play)
-  # ---------------------------------------------------------------------------
   handlers:
     - name: Reload systemd daemon teardown
       ansible.builtin.systemd:
