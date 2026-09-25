@@ -32,49 +32,48 @@ all:
   children:
     cluster_nodes:
       hosts:
-#       mik:
-#         ansible_host: 192.168.105.2
-#         ram_gb: 64
-#         cpu_type: 8500
-#         node_packages:
-#           - rsync
-#           - tree
-#           - tmux
-#         elasticsearch_ip: 192.168.105.210/24
-#         cluster_roles:
-#           - elasticsearch_node
-#         custom_sans:
-#           - es01.bird.internal
+       mik:
+         ansible_host: 192.168.105.2
+         ram_gb: 64
+         cpu_type: 8500
+         node_packages:
+           - rsync
+           - tree
+           - tmux
+         elasticsearch_ip: 192.168.105.2/24
+         cluster_roles:
+           - elasticsearch_node
+         custom_sans:
+           - es01.bird.internal
+       mak:
+         ansible_host: 192.168.105.3
+         ram_gb: 32
+         cpu_type: 8500T
+         node_packages:
+           - htop
+           - ncdu
+         elasticsearch_ip: 192.168.105.3/24
+         kibana_ip: 192.168.105.3/24
+         cluster_roles:
+           - elasticsearch_node
+           - kibana_node
+         custom_sans:
+           - kibana.bird.internal
+           - es02.bird.internal
 
-        mak:
-          ansible_host: 192.168.105.3
-          ram_gb: 32
-          cpu_type: 8500T
-          node_packages:
-            - htop
-            - ncdu
-          elasticsearch_ip: 192.168.105.3/24
-          kibana_ip: 192.168.105.3/24
-          cluster_roles:
-            - elasticsearch_node
-            - kibana_node
-          custom_sans:
-            - kibana.bird.internal
-            - es02.bird.internal
+         # Optional per-node overrides (uncomment if you ever want to force explicit limits):
+         es_heap_size_gb: 8
+         kibana_memory_mb: 4096
 
-          # Optional per-node overrides (uncomment if you ever want to force explicit limits):
-          # es_heap_size_gb: 8
-          # kibana_memory_mb: 4096
-
-#       muk:
-#         ansible_host: 192.168.105.4
-#         ram_gb: 16
-#         cpu_type: 8500T
-#         node_packages:
-#           - iotop
-#           - duf
-#         elasticsearch_ip: 192.168.105.230/24
-#         cluster_roles:
-#           - elasticsearch_node
-#         custom_sans:
-#           - es03.bird.internal
+       muk:
+         ansible_host: 192.168.105.4
+         ram_gb: 16
+         cpu_type: 8500T
+         node_packages:
+           - iotop
+           - duf
+         elasticsearch_ip: 192.168.105.4/24
+         cluster_roles:
+           - elasticsearch_node
+         custom_sans:
+           - es03.bird.internal
