@@ -115,6 +115,7 @@
         url: "https://{{ (hostvars[inventory_hostname]['elasticsearch_ip'] | default(ansible_host)).split('/')[0] }}:9200/_cluster/health"
         user: elastic
         password: "{{ es_elastic_password }}"
+        force_basic_auth: true
         validate_certs: false
         status_code: [200]
       register: es_auth_check
@@ -130,7 +131,7 @@
         --url "https://{{ (hostvars[inventory_hostname]['elasticsearch_ip'] | default(ansible_host)).split('/')[0] }}:9200"
         --interactive
         --batch
-      when: es_auth_check.status != 200
+      when: es_auth_check.status is not defined or es_auth_check.status != 200
       run_once: true
       no_log: true
 
@@ -143,10 +144,11 @@
         method: GET
         user: elastic
         password: "{{ es_elastic_password }}"
+        force_basic_auth: true
         validate_certs: false
         status_code: [200]
       register: es_health_check
-      until: es_health_check.status == 200
+      until: es_health_check.status is defined and es_health_check.status == 200
       retries: 24
       delay: 5
       no_log: true

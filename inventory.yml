@@ -18,7 +18,7 @@ all:
     cert_organizational_unit: "Office for Directing DTN Bundle Custody Transfers of WireGuard-over-BLE HID Service 0x1812 Page 0x20 (HUD) over hid-ebpf to the Outer Rim"
     # Right, who made this up?
     cert_root_ca_cn: "B.I.R.D. (BIRD Interstellar Recursive Defenestration) Root CA"
-    elk_version: 9.5.4
+    elk_version: 9.5.5
 
     # =========================================================================
     # Memory Sizing Defaults
