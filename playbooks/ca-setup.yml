@@ -1,0 +1,105 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Generate Local Root CA & Anchor in Controller.
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+    real_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['env']['USER']) | default(ansible_facts['user_id']) }}"
+  tasks:
+    - name: Ensure local certificates directory exists
+      ansible.builtin.file:
+        path: "{{ cert_dir }}"
+        state: directory
+        mode: '0700'
+        owner: "{{ real_user }}"
+
+    - name: Get localized Desktop directory path via xdg-user-dir
+      ansible.builtin.command:
+        cmd: "xdg-user-dir DESKTOP"
+      become: true
+      become_user: "{{ real_user }}"
+      register: xdg_desktop_cmd
+      changed_when: false
+      failed_when: false
+
+    - name: Set desktop_dir fact with fallback
+      ansible.builtin.set_fact:
+        desktop_dir: "{{ xdg_desktop_cmd.stdout if (xdg_desktop_cmd.stdout | length > 0) else ('/home/' ~ real_user ~ '/Desktop') }}"
+
+    - name: Generate Root CA Private Key (PKCS#8)
+      community.crypto.openssl_privatekey:
+        path: "{{ cert_dir }}/ca.key"
+        type: RSA
+        size: 4096
+        format: pkcs8
+        force: false
+
+    - name: Generate Root CA CSR
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: "{{ cert_dir }}/ca.key"
+        common_name: "{{ cert_root_ca_cn | default('B.I.R.D. (BIRD Interstellar Recursive Defenestration) Root CA') }}"
+        organization_name: "{{ hostvars['localhost']['cert_organization'] | default('Vogon Interplanetary Delay-Tolerant Network Bureau (RFC 9171)') }}"
+        organizational_unit_name: "{{ hostvars['localhost']['cert_organizational_unit'] | default('Department of Directing WireGuard-over-BLE HID Service 0x1812 Tunneling via Page 0x20 (HUD) over hid-ebpf via DTN Bundle Store-and-Forward to a Closed Window') }}"
+        basic_constraints:
+          - "CA:TRUE"
+        basic_constraints_critical: true
+        key_usage:
+          - keyCertSign
+          - cRLSign
+      register: ca_csr
+
+    - name: Write Root CA Certificate directly to file
+      community.crypto.x509_certificate:
+        path: "{{ cert_dir }}/ca.crt"
+        csr_content: "{{ ca_csr.csr }}"
+        privatekey_path: "{{ cert_dir }}/ca.key"
+        provider: selfsigned
+        selfsigned_not_after: "+{{ hostvars['localhost']['ca_valid_days'] | default(3650) }}d"
+        force: false
+
+    - name: Copy CA certificate to localized Desktop directory
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/ca.crt"
+        dest: "{{ desktop_dir }}/ELK_Internal_CA.crt"
+        mode: '0644'
+        owner: "{{ real_user }}"
+        remote_src: true
+
+    - name: Install CA certificate into Controller system trust (CachyOS/Arch)
+      become: true
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/ca.crt"
+        dest: "/etc/ca-certificates/trust-source/anchors/ELK_Internal_CA.crt"
+        mode: '0644'
+        remote_src: true
+      notify: Update controller trust store
+
+  handlers:
+    - name: Update controller trust store
+      become: true
+      ansible.builtin.command:
+        cmd: "update-ca-trust"
+      changed_when: true
+
+- name: Push Root CA to Cluster Nodes and Update System Trust.
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+  tasks:
+    - name: Install CA into node CachyOS trust store
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/ca.crt"
+        dest: "/etc/ca-certificates/trust-source/anchors/ELK_Internal_CA.crt"
+        mode: '0644'
+      notify: Update node trust store
+
+  handlers:
+    - name: Update node trust store
+      ansible.builtin.command:
+        cmd: "update-ca-trust"
+      changed_when: true

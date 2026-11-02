@@ -1,0 +1,55 @@
+#!/usr/bin/env ansible-playbook
+- name: Generate Elasticsearch Node Certificates Locally.
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+    real_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['env']['USER']) | default(ansible_facts['user_id']) }}"
+  tasks:
+    - name: Verify Root CA exists
+      ansible.builtin.stat:
+        path: "{{ cert_dir }}/ca.crt"
+      register: ca_stat
+      failed_when: not ca_stat.stat.exists
+    - name: Generate Elasticsearch certificates for cluster nodes
+      ansible.builtin.include_tasks: inner_node_certs.yml
+      loop: "{{ groups['cluster_nodes'] }}"
+      loop_control:
+        loop_var: node_name
+      when: "'elasticsearch_node' in (hostvars[node_name]['cluster_roles'] | default([]))"
+- name: Deploy Certificates to Elasticsearch Nodes.
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+  tasks:
+    - name: End play for nodes without the elasticsearch_node role.
+      ansible.builtin.meta: end_host
+      when: "'elasticsearch_node' not in (cluster_roles | default([]))"
+    - name: Ensure Elasticsearch cert directory exists
+      ansible.builtin.file:
+        path: /etc/elasticsearch/certs
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0750'
+    - name: Push CA certificate to Elasticsearch
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/ca.crt"
+        dest: /etc/elasticsearch/certs/ca.crt
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0644'
+    - name: Push Elasticsearch node key and certificate
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/{{ inventory_hostname }}.{{ item }}"
+        dest: "/etc/elasticsearch/certs/{{ inventory_hostname }}.{{ item }}"
+        owner: elasticsearch
+        group: elasticsearch
+        mode: "{{ '0600' if item == 'key' else '0644' }}"
+      loop:
+        - key
+        - crt

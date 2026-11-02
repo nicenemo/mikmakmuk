@@ -1,0 +1,46 @@
+# ======================== Cluster & Node ========================
+cluster.name: cachyos-es-cluster
+node.name: {{ inventory_hostname }}
+
+# ========================== Network =============================
+# Stripping the CIDR mask (e.g. /24) from the elasticsearch_ip variable
+network.host: {{ (elasticsearch_ip.split('/'))[0] }}
+http.port: 9200
+transport.port: 9300
+
+# ================= **Discovery & Seed Nodes** ===================
+discovery.seed_hosts:
+{% for host in groups['cluster_nodes'] %}
+  - "{{ (hostvars[host]['elasticsearch_ip'].split('/'))[0] }}"
+{% endfor %}
+
+{# Safe Bootstrap: Only injected if the playbook detects an empty data directory #}
+{% if not node_is_bootstrapped %}
+cluster.initial_master_nodes:
+{% for host in groups['cluster_nodes'] %}
+  - "{{ host }}"
+{% endfor %}
+{% endif %}
+
+# ======================= Licensing ==============================
+# Defaults to 'basic' (free license). Set es_license_type or ES_LICENSE_TYPE=trial to initiate a 30-day trial.
+xpack.license.self_generated.type: {{ es_license_type | default(lookup('env', 'ES_LICENSE_TYPE') | default('basic', true)) }}
+
+# ======================= Security (9.x) =========================
+xpack.security.enabled: true
+xpack.security.enrollment.enabled: false
+
+# Transport SSL (Node-to-Node communication)
+xpack.security.transport.ssl:
+  enabled: true
+  verification_mode: certificate
+  key: /etc/elasticsearch/certs/{{ inventory_hostname }}.key
+  certificate: /etc/elasticsearch/certs/{{ inventory_hostname }}.crt
+  certificate_authorities: [ "/etc/elasticsearch/certs/ca.crt" ]
+
+# HTTP SSL (Client REST API communication)
+xpack.security.http.ssl:
+  enabled: true
+  key: /etc/elasticsearch/certs/{{ inventory_hostname }}.key
+  certificate: /etc/elasticsearch/certs/{{ inventory_hostname }}.crt
+  certificate_authorities: [ "/etc/elasticsearch/certs/ca.crt" ]

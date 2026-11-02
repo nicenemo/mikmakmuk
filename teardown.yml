@@ -1,4 +1,27 @@
 #!/usr/bin/env ansible-playbook
 ---
+# =============================================================================
+# Master Cluster Teardown Playbook (Elasticsearch & Kibana)
+# =============================================================================
+
+# 1. Stop Kibana service, purge certificates, and uninstall package
+- name: Import Kibana Certificates Teardown Playbook
+  ansible.builtin.import_playbook: playbooks/kibana-certs-teardown.yml
+
+- name: Import Kibana Uninstall Playbook
+  ansible.builtin.import_playbook: playbooks/kibana-uninstall.yml
+
+# 2. Stop Elasticsearch service, purge certificates, and uninstall package
+- name: Import Elasticsearch Certificates Teardown Playbook
+  ansible.builtin.import_playbook: playbooks/elasticsearch-certs-teardown.yml
+
+- name: Import Elasticsearch Uninstall Playbook
+  ansible.builtin.import_playbook: playbooks/elasticsearch-uninstall.yml
+
+# 3. Purge Root CA from node & controller trust stores, and delete local build certs
+- name: Import Root CA Teardown Playbook
+  ansible.builtin.import_playbook: playbooks/ca-teardown.yml
+
+# 4. Clean up base firewall rules and system dependencies
 - name: Import Base Teardown Playbook
   ansible.builtin.import_playbook: playbooks/base-teardown.yml

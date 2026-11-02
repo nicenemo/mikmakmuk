@@ -1,0 +1,67 @@
+# Maintainer: Homelab Automation <admin@homelab.local>
+pkgname=kibana
+pkgver={{ kibana_version }}
+pkgrel=1
+pkgdesc="Kibana data visualization platform for Elasticsearch"
+arch=('x86_64')
+url="https://www.elastic.co/kibana"
+license=('Elastic-2.0')
+depends=('glibc')
+options=('!strip' '!zipman')
+source=("kibana-${pkgver}-linux-x86_64.tar.gz")
+sha512sums=('SKIP')
+
+package() {
+  cd "${srcdir}/kibana-${pkgver}"
+
+  # Create application directories
+  install -dm755 "${pkgdir}/usr/share/kibana"
+  install -dm750 "${pkgdir}/etc/kibana"
+  install -dm755 "${pkgdir}/var/lib/kibana"
+  install -dm755 "${pkgdir}/var/log/kibana"
+  install -dm755 "${pkgdir}/usr/lib/systemd/system"
+
+  # Copy Kibana application files (including bundled Node.js under node/)
+  cp -a * "${pkgdir}/usr/share/kibana/"
+
+  # Move default configuration to /etc/kibana and symlink back
+  if [ -d "${pkgdir}/usr/share/kibana/config" ]; then
+    cp -a "${pkgdir}/usr/share/kibana/config/"* "${pkgdir}/etc/kibana/"
+    rm -rf "${pkgdir}/usr/share/kibana/config"
+  fi
+  ln -s /etc/kibana "${pkgdir}/usr/share/kibana/config"
+
+  # Symlink data and logs to standard system paths
+  rm -rf "${pkgdir}/usr/share/kibana/data"
+  ln -s /var/lib/kibana "${pkgdir}/usr/share/kibana/data"
+
+  # Symlink main binary to /usr/bin
+  install -dm755 "${pkgdir}/usr/bin"
+  ln -s /usr/share/kibana/bin/kibana "${pkgdir}/usr/bin/kibana"
+
+  # Create Kibana systemd service unit
+  cat <<EOF > "${pkgdir}/usr/lib/systemd/system/kibana.service"
+[Unit]
+Description=Kibana
+Documentation=https://www.elastic.co
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=kibana
+Group=kibana
+PrivateTmp=true
+Environment=KBN_PATH_CONF=/etc/kibana
+ExecStart=/usr/share/kibana/bin/kibana
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  # Set file permissions
+  chmod 640 "${pkgdir}/etc/kibana/kibana.yml"
+}

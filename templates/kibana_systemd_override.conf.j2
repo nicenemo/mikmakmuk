@@ -1,0 +1,7 @@
+# =============================================================================
+# Kibana Systemd Memory Limit Override
+# Managed by Ansible - do not edit manually
+# =============================================================================
+
+[Service]
+Environment="NODE_OPTIONS=--max-old-space-size={{ kibana_memory_mb }}"

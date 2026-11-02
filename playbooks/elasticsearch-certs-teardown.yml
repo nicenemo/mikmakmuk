@@ -1,0 +1,32 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Purge Certificates from Elasticsearch Nodes.
+  hosts: cluster_nodes
+  become: true
+  tasks:
+    - name: End play for nodes without the elasticsearch_node role.
+      ansible.builtin.meta: end_host
+      when: "'elasticsearch_node' not in (cluster_roles | default([]))"
+    - name: Remove Elasticsearch certificate directory
+      ansible.builtin.file:
+        path: /etc/elasticsearch/certs
+        state: absent
+- name: Remove Local Elasticsearch Node Certificates on Controller.
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+  tasks:
+    - name: Remove local leaf keys and certificates for Elasticsearch nodes
+      ansible.builtin.file:
+        path: "{{ cert_dir }}/{{ item }}.{{ ext }}"
+        state: absent
+      loop: "{{ query('nested', groups['cluster_nodes'], ['key', 'crt']) }}"
+      loop_control:
+        loop_var: node_item
+      vars:
+        item: "{{ node_item[0] }}"
+        ext: "{{ node_item[1] }}"
+      when: "'elasticsearch_node' in (hostvars[node_item[0]]['cluster_roles'] | default([]))"

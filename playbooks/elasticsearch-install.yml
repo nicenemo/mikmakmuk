@@ -1,0 +1,25 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Install Elasticsearch Package on Cluster.
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    build_dir: "{{ project_root }}/build/elasticsearch"
+    pkg_file_name: "elasticsearch-{{ elk_version }}-1-x86_64.pkg.tar.zst"
+    remote_pkg_path: "/tmp/{{ pkg_file_name }}"
+  tasks:
+    - name: End play for nodes without the elasticsearch_node role
+      ansible.builtin.meta: end_host
+      when: "'elasticsearch_node' not in (cluster_roles | default([]))"
+    - name: Check if Elasticsearch is already installed on host
+      ansible.builtin.command:
+        cmd: "pacman -Q elasticsearch"
+      register: pacman_check
+      failed_when: false
+      changed_when: false
+    - name: Install Elasticsearch package via pacman
+      community.general.pacman:
+        name: "{{ remote_pkg_path }}"
+        state: present
+      when: pacman_check.rc != 0

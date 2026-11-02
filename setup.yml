@@ -1,5 +1,53 @@
 #!/usr/bin/env ansible-playbook
 ---
+# =============================================================================
+# Master Cluster Provisioning Playbook (Elasticsearch & Kibana)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Base Environment & Internal Root CA Setup
+# -----------------------------------------------------------------------------
 - name: Import Base Setup Playbook
   ansible.builtin.import_playbook: playbooks/base-setup.yml
 
+- name: Import CA Setup Playbook
+  ansible.builtin.import_playbook: playbooks/ca-setup.yml
+
+# -----------------------------------------------------------------------------
+# 2. Elasticsearch Installation & Configuration Pipeline
+# -----------------------------------------------------------------------------
+- name: Import Elasticsearch Download Playbook
+  ansible.builtin.import_playbook: playbooks/elasticsearch-download.yml
+
+- name: Import Elasticsearch Package Playbook
+  ansible.builtin.import_playbook: playbooks/elasticsearch-package.yml
+
+- name: Import Elasticsearch User & Group Creation Playbook
+  ansible.builtin.import_playbook: playbooks/elasticsearch-create-user-and-group.yml
+
+- name: Import Elasticsearch Installation Playbook
+  ansible.builtin.import_playbook: playbooks/elasticsearch-install.yml
+
+- name: Import Elasticsearch Node Certificates Setup Playbook
+  ansible.builtin.import_playbook: playbooks/elasticsearch-certs-setup.yml
+
+- name: Import Elasticsearch Configuration & Health Playbook
+  ansible.builtin.import_playbook: playbooks/elasticsearch-configure.yml
+
+# -----------------------------------------------------------------------------
+# 3. Kibana Installation & Configuration Pipeline
+# -----------------------------------------------------------------------------
+- name: Import Kibana Download Playbook
+  ansible.builtin.import_playbook: playbooks/kibana-download.yml
+
+- name: Import Kibana Package Playbook
+  ansible.builtin.import_playbook: playbooks/kibana-package.yml
+
+- name: Import Kibana Installation Playbook
+  ansible.builtin.import_playbook: playbooks/kibana-distribute-and-install.yml
+
+- name: Import Kibana Node Certificates Setup Playbook
+  ansible.builtin.import_playbook: playbooks/kibana-certs-setup.yml
+
+- name: Import Kibana Configuration & Health Playbook
+  ansible.builtin.import_playbook: playbooks/kibana-configure.yml

@@ -1,0 +1,61 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Download Kibana.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    # Fetches elk_version from inventory.yml (defaults to 9.5.3 if undefined)
+    target_version: "{{ hostvars[groups['cluster_nodes'][0]]['elk_version'] if (groups['cluster_nodes'] is defined and hostvars[groups['cluster_nodes'][0]]['elk_version'] is defined) else '9.5.3' }}"
+    build_user: "{{ ansible_env.SUDO_USER | default(lookup('env', 'USER')) }}"
+  tasks:
+    - name: Verify if requested Kibana version exists on Elastic servers
+      ansible.builtin.uri:
+        url: "https://artifacts.elastic.co/downloads/kibana/kibana-{{ target_version }}-linux-x86_64.tar.gz"
+        method: HEAD
+        status_code: [200, 404]
+        timeout: 5
+      register: version_check
+      ignore_errors: true
+    - name: Fail early if Kibana version is not available
+      ansible.builtin.fail:
+        msg: "Version '{{ target_version }}' does not exist on artifacts.elastic.co (HTTP Status {{ version_check.status }}). Please check 'elk_version' in inventory.yml!"
+      when: version_check.status != 200
+    - name: Set resolved version fact
+      ansible.builtin.set_fact:
+        resolved_elk_version: "{{ target_version }}"
+    - name: Display active ELK version
+      ansible.builtin.debug:
+        msg: "Kibana version successfully verified: {{ resolved_elk_version }}"
+    - name: Set path facts for local build
+      ansible.builtin.set_fact:
+        build_dir: "{{ project_root }}/build/kibana"
+        pkg_file_name: "kibana-{{ resolved_elk_version }}-1-x86_64.pkg.tar.zst"
+    - name: Ensure Kibana build directory exists
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        state: directory
+        mode: '0755'
+    - name: Check if tarball already exists locally
+      ansible.builtin.stat:
+        path: "{{ build_dir }}/kibana-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+      register: tarball_stat
+    - name: Download Kibana tarball locally
+      ansible.builtin.shell:
+        cmd: >
+          wget --continue --progress=bar:force:noscroll
+          -O "{{ build_dir }}/kibana-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+          "https://artifacts.elastic.co/downloads/kibana/kibana-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+      when: not tarball_stat.stat.exists
+    - name: Download official SHA512 checksum file
+      ansible.builtin.get_url:
+        url: "https://artifacts.elastic.co/downloads/kibana/kibana-{{ resolved_elk_version }}-linux-x86_64.tar.gz.sha512"
+        dest: "{{ build_dir }}/kibana-{{ resolved_elk_version }}-linux-x86_64.tar.gz.sha512"
+        mode: '0644'
+    - name: Verify download integrity against official SHA512 checksum
+      ansible.builtin.shell:
+        cmd: "sha512sum -c kibana-{{ resolved_elk_version }}-linux-x86_64.tar.gz.sha512"
+        chdir: "{{ build_dir }}"
+      register: checksum_verify
+      changed_when: false

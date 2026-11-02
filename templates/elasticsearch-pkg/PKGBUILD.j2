@@ -1,0 +1,75 @@
+# Maintainer: Hans Kruse <kruse@hanskruse.eu>
+pkgname=elasticsearch
+pkgver={{ es_version }}
+pkgrel=1
+pkgdesc="Distributed, RESTful search and analytics engine"
+arch=('x86_64')
+url="https://www.elastic.co/products/elasticsearch"
+license=('Apache-2.0')
+depends=('bash')
+optdepends=('java-runtime>=17: Fallback Java runtime if bundled JDK is not used')
+options=('!strip' '!zipman')
+source=("elasticsearch-${pkgver}-linux-x86_64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "${srcdir}/elasticsearch-${pkgver}"
+
+  # Create application directories
+  install -dm755 "${pkgdir}/usr/share/elasticsearch"
+  install -dm755 "${pkgdir}/etc/elasticsearch"
+  install -dm755 "${pkgdir}/var/lib/elasticsearch"
+  install -dm755 "${pkgdir}/var/log/elasticsearch"
+  install -dm755 "${pkgdir}/usr/lib/systemd/system"
+
+  # Copy base files AND bundled JDK to /usr/share/elasticsearch
+  cp -r bin jdk lib modules plugins "${pkgdir}/usr/share/elasticsearch/"
+
+  # Copy default configuration files to /etc/elasticsearch
+  if [ -d config ]; then
+    cp -r config/* "${pkgdir}/etc/elasticsearch/"
+  fi
+
+  # Ensure symbolic link for config directory in application path
+  ln -s /etc/elasticsearch "${pkgdir}/usr/share/elasticsearch/config"
+
+  # Install systemd service unit
+  cat << 'EOF' > "${pkgdir}/usr/lib/systemd/system/elasticsearch.service"
+[Unit]
+Description=Elasticsearch
+Documentation=https://www.elastic.co
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+RuntimeDirectory=elasticsearch
+PrivateTmp=true
+Environment=ES_HOME=/usr/share/elasticsearch
+Environment=ES_JAVA_HOME=/usr/share/elasticsearch/jdk
+Environment=ES_PATH_CONF=/etc/elasticsearch
+Environment=PID_DIR=/run/elasticsearch
+EnvironmentFile=-/etc/default/elasticsearch
+
+User=elasticsearch
+Group=elasticsearch
+
+ExecStart=/usr/share/elasticsearch/bin/elasticsearch -p ${PID_DIR}/elasticsearch.pid
+
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65535
+LimitNPROC=4096
+LimitMEMLOCK=infinity
+LimitFSIZE=infinity
+TimeoutStopSec=0
+KillMode=process
+SendSIGKILL=no
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  chmod 644 "${pkgdir}/usr/lib/systemd/system/elasticsearch.service"
+}

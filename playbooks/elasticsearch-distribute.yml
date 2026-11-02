@@ -1,0 +1,20 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Distribute Elasticsearch Package on Cluster.
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    build_dir: "{{ project_root }}/build/elasticsearch"
+    pkg_file_name: "elasticsearch-{{ elk_version }}-1-x86_64.pkg.tar.zst"
+    remote_pkg_path: "/tmp/{{ pkg_file_name }}"
+  tasks:
+    - name: End play for nodes without the elasticsearch_node role
+      ansible.builtin.meta: end_host
+      when: "'elasticsearch_node' not in (cluster_roles | default([]))"
+    - name: Copy Elasticsearch package to remote hosts
+      ansible.builtin.copy:
+        src: "{{ build_dir }}/{{ pkg_file_name }}"
+        dest: "{{ remote_pkg_path }}"
+        mode: '0644'
+      when: pacman_check.rc != 0

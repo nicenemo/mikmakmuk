@@ -1,0 +1,170 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Configure Kibana.
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    es_elastic_password: "{{ lookup('ansible.builtin.file', project_root ~ '/credentials/elastic_password.txt') }}"
+    kibana_encryption_key: "{{ lookup('ansible.builtin.password', project_root ~ '/credentials/kibana_encryption_key.txt length=32 chars=ascii_letters,digits') }}"
+  tasks:
+    - name: End play for nodes without the kibana_node role
+      ansible.builtin.meta: end_host
+      when: "'kibana_node' not in (cluster_roles | default([]))"
+
+    - name: Resolve first active Elasticsearch host in cluster
+      ansible.builtin.set_fact:
+        es_control_host: "{{ item }}"
+      loop: "{{ groups['cluster_nodes'] }}"
+      when:
+        - es_control_host is not defined
+        - "'elasticsearch_node' in (hostvars[item]['cluster_roles'] | default([]))"
+      run_once: true
+
+    - name: Allow Kibana web UI access on port 5601
+      community.general.ufw:
+        rule: allow
+        port: '5601'
+        proto: tcp
+        comment: "Kibana Web UI"
+
+    - name: Enable UFW state
+      community.general.ufw:
+        state: enabled
+
+    - name: Check if Kibana service account token already exists locally
+      ansible.builtin.stat:
+        path: "{{ project_root }}/credentials/kibana_service_token.txt"
+      delegate_to: localhost
+      become: false
+      register: local_token_stat
+      run_once: true
+
+    - name: Create Kibana service account token via Elasticsearch REST API
+      ansible.builtin.uri:
+        url: "https://{{ (hostvars[es_control_host]['elasticsearch_ip'] | default(hostvars[es_control_host]['ansible_host'])).split('/')[0] }}:9200/_security/service/elastic/kibana/credential/token/kibana-ansible-token"
+        method: POST
+        user: elastic
+        password: "{{ es_elastic_password }}"
+        validate_certs: false
+        status_code: [200, 201]
+      delegate_to: localhost
+      become: false
+      register: token_api_response
+      when: not local_token_stat.stat.exists
+      run_once: true
+
+    - name: Save service account token locally on control machine
+      ansible.builtin.copy:
+        content: "{{ token_api_response.json.token.value }}"
+        dest: "{{ project_root }}/credentials/kibana_service_token.txt"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+      when: not local_token_stat.stat.exists
+      run_once: true
+
+    - name: Load service account token from local credentials file
+      ansible.builtin.set_fact:
+        kibana_service_token: "{{ lookup('ansible.builtin.file', project_root ~ '/credentials/kibana_service_token.txt') | trim }}"
+
+    - name: Ensure Kibana directories exist with correct permissions
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: kibana
+        group: kibana
+        mode: '0750'
+      loop:
+        - /etc/kibana
+        - /var/lib/kibana
+        - /var/log/kibana
+
+    - name: Fix ownership and permissions on Kibana TLS certificates
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        owner: kibana
+        group: kibana
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "/etc/kibana/certs", mode: "0750" }
+        - { path: "/etc/kibana/certs/ca.crt", mode: "0644" }
+        - { path: "/etc/kibana/certs/{{ inventory_hostname }}.crt", mode: "0644" }
+        - { path: "/etc/kibana/certs/{{ inventory_hostname }}.key", mode: "0600" }
+
+    - name: Ensure Kibana systemd override directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/system/kibana.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Deploy Kibana systemd memory override
+      ansible.builtin.template:
+        src: "{{ project_root }}/templates/kibana_systemd_override.conf.j2"
+        dest: /etc/systemd/system/kibana.service.d/override.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Kibana
+
+    - name: Deploy Kibana configuration template
+      ansible.builtin.template:
+        src: "{{ project_root }}/templates/kibana.yml.j2"
+        dest: /etc/kibana/kibana.yml
+        owner: kibana
+        group: kibana
+        mode: '0660'
+      notify: Restart Kibana
+
+    - name: Enable and start Kibana service
+      ansible.builtin.systemd:
+        name: kibana
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Flush handlers to process Kibana restarts immediately
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for Kibana Web UI (5601) to start listening
+      ansible.builtin.wait_for:
+        host: "{{ (hostvars[inventory_hostname]['kibana_ip'] | default(ansible_host)).split('/')[0] }}"
+        port: 5601
+        state: started
+        delay: 5
+        timeout: 60
+
+    - name: Verify Kibana HTTP status endpoint availability
+      ansible.builtin.uri:
+        url: "https://{{ (hostvars[inventory_hostname]['kibana_ip'] | default(ansible_host)).split('/')[0] }}:5601/api/status"
+        method: GET
+        validate_certs: false
+        status_code: [200, 302]
+      register: kibana_health_check
+      until: kibana_health_check.status in [200, 302]
+      retries: 24
+      delay: 5
+      no_log: true
+
+    - name: Display Kibana URL & login credentials
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "Kibana Node {{ inventory_hostname }} is HEALTHY!"
+          - "URL: https://{{ (hostvars[inventory_hostname]['kibana_ip'] | default(ansible_host)).split('/')[0] }}:5601"
+          - ""
+          - "Login Username: elastic"
+          - "Login Password: {{ es_elastic_password }}"
+          - ""
+          - "Status endpoint test command (copy-paste directly in ANY shell):"
+          - "  curl -k https://{{ (hostvars[inventory_hostname]['kibana_ip'] | default(ansible_host)).split('/')[0] }}:5601/api/status"
+          - "=========================================================="
+
+  handlers:
+    - name: Restart Kibana
+      ansible.builtin.systemd:
+        name: kibana
+        state: restarted
+        daemon_reload: true

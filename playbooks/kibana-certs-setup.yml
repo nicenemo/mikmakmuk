@@ -1,0 +1,56 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Generate Kibana Node Certificates Locally.
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+    real_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['env']['USER']) | default(ansible_facts['user_id']) }}"
+  tasks:
+    - name: Verify Root CA exists
+      ansible.builtin.stat:
+        path: "{{ cert_dir }}/ca.crt"
+      register: ca_stat
+      failed_when: not ca_stat.stat.exists
+    - name: Generate Kibana certificates for cluster nodes
+      ansible.builtin.include_tasks: inner_node_certs.yml
+      loop: "{{ groups['cluster_nodes'] }}"
+      loop_control:
+        loop_var: node_name
+      when: "'kibana_node' in (hostvars[node_name]['cluster_roles'] | default([]))"
+- name: Deploy Certificates to Kibana Nodes.
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir | dirname if playbook_dir.endswith('playbooks') else playbook_dir }}"
+    cert_dir: "{{ project_root }}/certs"
+  tasks:
+    - name: End play for nodes without the kibana_node role
+      ansible.builtin.meta: end_host
+      when: "'kibana_node' not in (cluster_roles | default([]))"
+    - name: Ensure Kibana cert directory exists
+      ansible.builtin.file:
+        path: /etc/kibana/certs
+        state: directory
+        owner: kibana
+        group: kibana
+        mode: '0750'
+    - name: Push CA certificate to Kibana
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/ca.crt"
+        dest: /etc/kibana/certs/ca.crt
+        owner: kibana
+        group: kibana
+        mode: '0644'
+    - name: Push Kibana node key and certificate
+      ansible.builtin.copy:
+        src: "{{ cert_dir }}/{{ inventory_hostname }}.{{ item }}"
+        dest: "/etc/kibana/certs/{{ inventory_hostname }}.{{ item }}"
+        owner: kibana
+        group: kibana
+        mode: "{{ '0600' if item == 'key' else '0644' }}"
+      loop:
+        - key
+        - crt
