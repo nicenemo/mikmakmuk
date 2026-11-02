@@ -1,5 +1,7 @@
 #!/usr/bin/env ansible-playbook
 ---
+# -----------------------------------------------------------------------------
+# 1. Base Environment & Internal Root CA Setup
+# -----------------------------------------------------------------------------
 - name: Import Base Setup Playbook
   ansible.builtin.import_playbook: playbooks/base-setup.yml
-

@@ -1,4 +1,5 @@
 #!/usr/bin/env ansible-playbook
 ---
+# 1. Clean up base firewall rules and system dependencies
 - name: Import Base Teardown Playbook
   ansible.builtin.import_playbook: playbooks/base-teardown.yml
