@@ -10,6 +10,9 @@
 - name: Import Base Setup Playbook
   ansible.builtin.import_playbook: playbooks/base-setup.yml
 
+- name: Import Kernel Setup Playbook
+  ansible.builtin.import_playbook: playbooks/kernel-setup.yml
+
 - name: Import CA Setup Playbook
   ansible.builtin.import_playbook: playbooks/ca-setup.yml
 

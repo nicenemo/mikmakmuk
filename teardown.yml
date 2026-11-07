@@ -22,6 +22,9 @@
 - name: Import Root CA Teardown Playbook
   ansible.builtin.import_playbook: playbooks/ca-teardown.yml
 
-# 4. Clean up base firewall rules and system dependencies
+# 4. Clean up kernel configuration and base firewall/system dependencies
+- name: Import Kernel Teardown Playbook
+  ansible.builtin.import_playbook: playbooks/kernel-teardown.yml
+
 - name: Import Base Teardown Playbook
   ansible.builtin.import_playbook: playbooks/base-teardown.yml
