@@ -282,15 +282,17 @@
       <section>
         <h2>The Management Summary</h2>
         <p>
-          Instead of buying a loud, power-hungry server rack, I built a quiet, compact 3-node cluster using HP EliteDesk and ProDesk Mini G4 PCs mounted under my desk shelf.
+          Instead of buying a loud, power-hungry server rack, I built a quiet, compact 3-node cluster using HP EliteDesk
+          and ProDesk Mini G4 PCs mounted under my DIY desk shelf.
         </p>
         <p>
           Rather than wrapping everything inside heavy virtual machine hypervisors like Proxmox, <strong>Mik Mak
             Muk</strong> runs directly on bare-metal <strong>CachyOS</strong>. Using Ansible, the project builds a fast,
           rock-solid baseline OS layer before deploying workload such as multi-node <strong>Elasticsearch 9
             &amp; Kibana</strong> cluster or running distributed <strong>llama.cpp AI cluster</strong> for embedding and
-          inference.
+          inference as initial experiments.
         </p>
+        <p>In future experiments I will explore systemd containers, incus and K0s with Cillium</p>
       </section>
 
       <!-- HARDWARE TOPOLOGY -->
