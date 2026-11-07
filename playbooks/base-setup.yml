@@ -3,6 +3,8 @@
 - name: Apply Base System Optimizations and Configuration
   hosts: cluster_nodes
   become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
 
   tasks:
     # -------------------------------------------------------------------------
@@ -75,7 +77,7 @@
     # -------------------------------------------------------------------------
     - name: Deploy PowerTOP auto-tune systemd service unit
       ansible.builtin.copy:
-        src: files/powertop.service
+        src: "{{ project_root }}/files/powertop.service"
         dest: /etc/systemd/system/powertop.service
         owner: root
         group: root

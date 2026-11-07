@@ -1,8 +1,10 @@
 all:
   vars:
+    bootstrap_user: kruse
+    ansible_management_user: myansibleuser
+    ansible_user: "{{ ansible_management_user }}"
+    ansible_python_interpreter: /usr/bin/python3
     cluster_connection_name: "cluster-vlan107"
-
-    # Baseline system packages for CachyOS nodes
     common_packages:
       - neovim
       - tmux

@@ -1,35 +1,14 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: Apply Kernel Command Line, Sysctl, and Module Configuration
+- name: Apply Kernel Command Line and Module Configuration
   hosts: cluster_nodes
   become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
 
   tasks:
     # -------------------------------------------------------------------------
-    # 1. Sysctl Runtime Optimizations
-    # -------------------------------------------------------------------------
-    - name: Ensure /etc/sysctl.d directory exists
-      ansible.builtin.file:
-        path: /etc/sysctl.d
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-
-    - name: Configure kernel sysctl parameters
-      ansible.posix.sysctl:
-        name: "{{ item.key }}"
-        value: "{{ item.value }}"
-        state: present
-        sysctl_file: /etc/sysctl.d/99-homelab-kernel.conf
-        reload: true
-      loop:
-        - { key: 'vm.max_map_count', value: '262144' }
-        - { key: 'fs.file-max', value: '2097152' }
-        - { key: 'net.core.somaxconn', value: '1024' }
-
-    # -------------------------------------------------------------------------
-    # 2. Kernel Command Line Drop-Ins (USB Autosuspend Disable)
+    # 1. Kernel Command Line Drop-Ins & Tuning
     # -------------------------------------------------------------------------
     - name: Ensure /etc/cmdline.d directory exists
       ansible.builtin.file:
@@ -39,9 +18,9 @@
         group: root
         mode: '0755'
 
-    - name: Copy kernel command-line parameters from external file
+    - name: Configure hardware kernel tuning drop-in
       ansible.builtin.copy:
-        src: files/homelab-tuning.conf
+        src: "{{ project_root }}/files/homelab-tuning.conf"
         dest: /etc/cmdline.d/homelab-tuning.conf
         owner: root
         group: root
@@ -49,17 +28,17 @@
       notify: Regenerate initramfs
 
     # -------------------------------------------------------------------------
-    # 3. Kernel Module Configuration
+    # 2. Kernel Module Configuration & Loading
     # -------------------------------------------------------------------------
-    - name: Ensure i915 iGPU module configuration is set to load at boot
+    - name: Ensure i915 module is set to load at boot
       ansible.builtin.copy:
-        src: files/igpu.conf
+        src: "{{ project_root }}/files/igpu.conf"
         dest: /etc/modules-load.d/igpu.conf
         owner: root
         group: root
         mode: '0644'
 
-    - name: Load i915 kernel module
+    - name: Load i915 module
       community.general.modprobe:
         name: i915
         state: present
@@ -69,6 +48,5 @@
   # ---------------------------------------------------------------------------
   handlers:
     - name: Regenerate initramfs
-      ansible.builtin.command:
-        cmd: mkinitcpio -P
+      ansible.builtin.command: mkinitcpio -P
       changed_when: true

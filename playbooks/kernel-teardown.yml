@@ -1,43 +1,25 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: Revert Kernel Command Line, Sysctl, and Module Configuration
+- name: Revert Kernel Command Line and Module Configuration
   hosts: cluster_nodes
   become: true
 
   tasks:
-    # -------------------------------------------------------------------------
-    # 1. Remove Sysctl Configuration
-    # -------------------------------------------------------------------------
-    - name: Remove custom kernel sysctl configuration file
-      ansible.builtin.file:
-        path: /etc/sysctl.d/99-homelab-kernel.conf
-        state: absent
-
-    # -------------------------------------------------------------------------
-    # 2. Remove Kernel Module Configuration
-    # -------------------------------------------------------------------------
     - name: Remove iGPU load module file
       ansible.builtin.file:
         path: /etc/modules-load.d/igpu.conf
         state: absent
 
-    # -------------------------------------------------------------------------
-    # 3. Remove Kernel Command Line Drop-Ins
-    # -------------------------------------------------------------------------
     - name: Remove homelab cmdline kernel tuning configuration
       ansible.builtin.file:
         path: /etc/cmdline.d/homelab-tuning.conf
         state: absent
       notify: Regenerate initramfs teardown
 
-    - name: Flush handlers to force initramfs rebuild
+    - name: Flush handlers
       ansible.builtin.meta: flush_handlers
 
-  # ---------------------------------------------------------------------------
-  # Handlers
-  # ---------------------------------------------------------------------------
   handlers:
     - name: Regenerate initramfs teardown
-      ansible.builtin.command:
-        cmd: mkinitcpio -P
+      ansible.builtin.command: mkinitcpio -P
       changed_when: true
