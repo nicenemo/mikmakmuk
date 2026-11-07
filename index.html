@@ -330,22 +330,34 @@
 
       <!-- UNORTHODOX ENGINEERING & DESIGN CHOICES -->
       <section>
-        <h2>Unorthodox Hardware Hacks &amp; Design Choices</h2>
+        <h2>Design Choices</h2>
         <p>Building on compact 8th-Gen mini-PC chassis comes with real hardware limits. Here is how I solved them:</p>
 
         <div class="grid-two">
           <div class="card">
-            <h3>The Empty SATA Drive Caddy Hack</h3>
+            <h3>SATA Drive Caddy issues</h3>
             <p style="font-size: 0.9rem;">
-              All nodes run OS and data strictly on high-speed NVMe drives. However, removing the unused 2.5" SATA caddy to save space breaks cooling: on 65W models like <code>mik</code>, the CPU fan mounts directly to the SATA bracket! Removing it causes the fan to ramp up to <strong>100% full speed permanently</strong>. We keep the empty caddys installed solely to maintain stock fan mounting and quiet airflow.
+              All nodes run OS and data strictly on high-speed NVMe drives. However, removing the unused 2.5" SATA caddy
+              to save space breaks cooling: on 65W models like <code>mik</code>, the CPU fan mounts directly to the SATA
+              bracket! Removing it causes the CPU fan to ramp up to <strong>100% full speed permanently</strong>. We keep
+              the empty caddys installed solely to maintain stock fan mounting and quiet airflow. On 35 watt TDP models
+              I might consider removing the caddy later to install networking via issue.The 65 Watt Elite Desk model
+              does have two Nvme slots. The second one is unusable for normal NVME SSDs when the caddy is kept. A 30mm
+              SSD does fit.
             </p>
           </div>
 
           <div class="card">
             <h3>2.5 GbE USB-C Option Port Networking</h3>
-            <p style="font-size: 0.9rem;">
-              HP never made official 2.5 GbE option modules for 4th gen chassis. Thunderbolt is exclusive to EliteDesk (missing on ProDesk), M.2 Wi-Fi/NVMe network adapters require custom 3D-printed rear covers, and 10 GbE USB adapters throttle under heat. Adding USB-C 2.5 GbE dongles via Type-C option slots provides a clean, cheap 2.5x speed boost over the 1 GbE onboard port without MacGyver hacks.
-            </p>
+            <ul style="font-size: 0.9rem;">
+              <li>HP never made official 2.5 GbE option modules for 4th gen chassis
+              <li>Thunderbolt is exclusive to EliteDesk (missing on ProDesk) and the required option port modules are
+                rare<.li>
+              <li>M.2 Wi-Fi/NVMe network adapters require custom 3D-printed rear covers to slot in the option port</li>
+              <li>10 GbE USB adapters throttle under heat.</li>
+              <li> Adding USB-C 2.5 GbE dongles via Type-C option slots provides a clean, cheap 2.5x speed boost over
+                the 1 GbE onboard port without MacGyver hacks.</li>
+            </ul>
           </div>
         </div>
       </section>
