@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mik Mak Muk Cluster</title>
-  <meta name="description" content="Baseline Ansible automation for a 3-node HP EliteDesk/ProDesk Mini cluster running CachyOS.">
+  <title>Mik Mak Muk — Bare-Metal CachyOS Cluster</title>
+  <meta name="description" content="A 3-node mini PC homelab cluster running CachyOS on bare metal. Highlighting Linux kernel tuning, hardware hack workarounds, automated enterprise PKI, and systemd automation.">
   <style>
     :root {
       --bg: #0f172a;
@@ -14,7 +14,11 @@
       --text-muted: #94a3b8;
       --accent: #38bdf8;
       --accent-hover: #7dd3fc;
-      --branch-bg: #0f172a;
+      --code-bg: #090d16;
+      --warning-bg: rgba(245, 158, 11, 0.1);
+      --warning-border: #d97706;
+      --teaser-bg: rgba(56, 189, 248, 0.05);
+      --teaser-border: #38bdf8;
     }
 
     * {
@@ -32,7 +36,7 @@
     }
 
     .container {
-      max-width: 800px;
+      max-width: 880px;
       margin: 0 auto;
     }
 
@@ -43,10 +47,11 @@
     }
 
     h1 {
-      font-size: 2.5rem;
-      font-weight: 700;
-      color: var(--text);
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
       margin-bottom: 0.5rem;
+      color: var(--text);
     }
 
     .subtitle {
@@ -69,7 +74,8 @@
       color: #0f172a;
       padding: 0.6rem 1.2rem;
       border-radius: 6px;
-      font-weight: 600;
+      font-size: 0.9rem;
+      font-weight: 700;
       text-decoration: none;
       transition: background-color 0.2s ease;
     }
@@ -90,51 +96,89 @@
     }
 
     .github-btn svg {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       fill: currentColor;
     }
 
     section {
-      margin-bottom: 2.5rem;
+      margin-bottom: 3rem;
     }
 
     h2 {
       font-size: 1.5rem;
       color: var(--accent);
       margin-bottom: 1rem;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+      padding-bottom: 0.4rem;
     }
 
-    .branches-card {
-      background-color: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.25rem;
-      margin-bottom: 2rem;
-    }
-
-    .branch-item {
+    p {
       margin-bottom: 1rem;
+      color: var(--text-muted);
     }
 
-    .branch-item:last-child {
+    p strong {
+      color: var(--text);
+    }
+
+    .story-box {
+      background-color: var(--card-bg);
+      border-left: 4px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      padding: 1.25rem 1.5rem;
+      margin: 1.5rem 0;
+      font-style: italic;
+    }
+
+    .story-box p {
+      color: #cbd5e1;
+      margin-bottom: 0.5rem;
+    }
+
+    .story-box p:last-child {
       margin-bottom: 0;
     }
 
-    .branch-name {
-      font-family: monospace;
-      font-size: 1.05rem;
+    .story-box strong {
       color: var(--accent);
-      background-color: var(--branch-bg);
-      padding: 0.15rem 0.4rem;
-      border-radius: 4px;
+      font-style: normal;
     }
 
-    .hardware-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1rem;
+    .hardware-table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      font-size: 0.95rem;
       margin-top: 1rem;
+    }
+
+    .hardware-table th,
+    .hardware-table td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hardware-table th {
+      background-color: var(--code-bg);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+    }
+
+    .hardware-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .grid-two {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 1rem;
     }
 
     .card {
@@ -145,33 +189,59 @@
     }
 
     .card h3 {
-      font-size: 1.2rem;
+      font-size: 1.15rem;
       color: var(--text);
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .badge {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.8rem;
+      color: var(--accent);
+      background-color: var(--code-bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .funny-note {
+      background-color: var(--warning-bg);
+      border: 1px solid var(--warning-border);
+      border-radius: 6px;
+      padding: 1rem;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+    }
+
+    .funny-note strong {
+      color: #f59e0b;
+    }
+
+    .teaser-box {
+      background-color: var(--teaser-bg);
+      border: 1px dashed var(--teaser-border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .teaser-box h3 {
+      color: var(--accent);
+      font-size: 1.25rem;
       margin-bottom: 0.5rem;
     }
 
-    .card ul {
-      list-style: none;
-      color: var(--text-muted);
-      font-size: 0.95rem;
-    }
-
-    .card ul li {
-      margin-bottom: 0.3rem;
-    }
-
-    .card ul li strong {
-      color: var(--text);
-    }
-
-    .tag {
-      display: inline-block;
-      background-color: rgba(56, 189, 248, 0.1);
-      color: var(--accent);
-      padding: 0.2rem 0.5rem;
-      border-radius: 4px;
-      font-size: 0.85rem;
-      margin-top: 0.5rem;
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85em;
+      background-color: var(--code-bg);
+      color: #e2e8f0;
+      padding: 0.15rem 0.35rem;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.05);
     }
 
     footer {
@@ -180,7 +250,7 @@
       border-top: 1px solid var(--border);
       text-align: center;
       color: var(--text-muted);
-      font-size: 0.875rem;
+      font-size: 0.85rem;
     }
   </style>
 </head>
@@ -189,14 +259,14 @@
   <div class="container">
     <header>
       <h1>Mik Mak Muk</h1>
-      <p class="subtitle">Bare-metal host automation, low-level kernel tuning, and USB networking for a 3-node mini PC cluster running CachyOS.</p>
+      <p class="subtitle">A 160 GB bare-metal CachyOS homelab cluster built on three HP Mini PCs. No heavy hypervisors, no cloud lock-in—just Ansible, custom kernel tuning, zero-touch enterprise PKI, and physical hardware hacks.</p>
 
       <div class="btn-group">
         <a href="https://github.com/nicenemo/mikmakmuk" class="github-btn" target="_blank" rel="noopener noreferrer">
           <svg viewBox="0 0 24 24">
             <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
           </svg>
-          Repository (main)
+          main Branch
         </a>
         <a href="https://github.com/nicenemo/mikmakmuk/tree/elastic-direct" class="github-btn secondary" target="_blank" rel="noopener noreferrer">
           <svg viewBox="0 0 24 24">
@@ -208,77 +278,160 @@
     </header>
 
     <main>
+      <!-- EXECUTIVE SUMMARY / INTRO -->
       <section>
-        <h2>Project Overview</h2>
+        <h2>The Management Summary</h2>
         <p>
-          <strong>Mik Mak Muk</strong> provides baseline Ansible automation for a 3-node HP EliteDesk and ProDesk Mini cluster[cite: 1].
-          It manages hardware optimization, GPU video acceleration, and NVMe power states at the host operating system level prior to workload deployment[cite: 1].
+          Instead of buying a loud, power-hungry server rack, I built a quiet, compact 3-node cluster using HP EliteDesk and ProDesk Mini G4 PCs mounted under my desk shelf.
+        </p>
+        <p>
+          Rather than wrapping everything inside heavy virtual machine hypervisors like Proxmox, <strong>Mik Mak Muk</strong> runs directly on bare-metal <strong>CachyOS</strong>. Using Ansible, the project builds a fast, rock-solid baseline OS layer before deploying workloads. Whether testing multi-node <strong>Elasticsearch 9 &amp; Kibana</strong> or running distributed <strong>llama.cpp AI cluster inference</strong>, the system isolates hardware performance tuning from higher-level software stacks.
         </p>
       </section>
 
+      <!-- HARDWARE TOPOLOGY -->
       <section>
-        <h2>Repository Branches</h2>
-        <div class="branches-card">
-          <div class="branch-item">
-            <p><span class="branch-name">main</span></p>
-            <p>Handles the core base OS setup, kernel-level optimizations (`mitigations=off`, `i915` GPU configuration, NVMe latency parameters), and configures the dedicated USB-C cluster networking (VLAN 107)[cite: 1, 11].</p>
+        <h2>Cluster Topology (160 GB RAM Total)</h2>
+        <table class="hardware-table">
+          <thead>
+            <tr>
+              <th>Host</th>
+              <th>Model</th>
+              <th>CPU</th>
+              <th>RAM</th>
+              <th>Primary Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>mik</code></td>
+              <td>HP EliteDesk 800 Mini G4</td>
+              <td>Intel i5-8500 (65W)</td>
+              <td>64 GB</td>
+              <td>Primary Master / Heavy Compute</td>
+            </tr>
+            <tr>
+              <td><code>mak</code></td>
+              <td>HP ProDesk 600 Mini G4</td>
+              <td>Intel i5-8500T (35W)</td>
+              <td>32 GB</td>
+              <td>Worker Node / Kibana UI</td>
+            </tr>
+            <tr>
+              <td><code>muk</code></td>
+              <td>HP ProDesk 400 Mini G4</td>
+              <td>Intel i5-8500T (35W)</td>
+              <td>64 GB</td>
+              <td>Worker / Ingress Node</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- UNORTHODOX ENGINEERING & DESIGN CHOICES -->
+      <section>
+        <h2>Unorthodox Hardware Hacks &amp; Design Choices</h2>
+        <p>Building on compact 8th-Gen mini-PC chassis comes with real hardware limits. Here is how I solved them:</p>
+
+        <div class="grid-two">
+          <div class="card">
+            <h3>The Empty SATA Drive Caddy Hack</h3>
+            <p style="font-size: 0.9rem;">
+              All nodes run OS and data strictly on high-speed NVMe drives. However, removing the unused 2.5" SATA caddy to save space breaks cooling: on 65W models like <code>mik</code>, the CPU fan mounts directly to the SATA bracket! Removing it causes the fan to ramp up to <strong>100% full speed permanently</strong>. We keep the empty caddys installed solely to maintain stock fan mounting and quiet airflow.
+            </p>
           </div>
-          <hr style="border: 0; border-top: 1px solid var(--border); margin: 1rem 0;">
-          <div class="branch-item">
-            <p><span class="branch-name">elastic-direct</span></p>
-            <p>Extends the baseline setup to deploy and configure a bare-metal <strong>Elasticsearch &amp; Kibana cluster</strong> running directly across the host nodes over the isolated USB cluster transport network[cite: 4, 8, 11].</p>
+
+          <div class="card">
+            <h3>2.5 GbE USB-C Option Port Networking</h3>
+            <p style="font-size: 0.9rem;">
+              HP never made official 2.5 GbE option modules for 4th gen chassis. Thunderbolt is exclusive to EliteDesk (missing on ProDesk), M.2 Wi-Fi/NVMe network adapters require custom 3D-printed rear covers, and 10 GbE USB adapters throttle under heat. Adding USB-C 2.5 GbE dongles via Type-C option slots provides a clean, cheap 2.5x speed boost over the 1 GbE onboard port without MacGyver hacks.
+            </p>
           </div>
         </div>
       </section>
 
+      <!-- FUNNY STORIES FROM THE BLOG -->
       <section>
-        <h2>Hardware Nodes</h2>
-        <div class="hardware-grid">
+        <h2>Tales from the Lab: Lockouts &amp; Vogon PKI</h2>
+
+        <div class="funny-note">
+          <strong>The Great pam_faillock Incident:</strong> Shortly after setting up the bare-metal OS, a few mistyped passwords during background Ansible tests triggered CachyOS brute-force protection (<code>pam_faillock</code>). The system assumed I was hacking myself and completely locked my personal login account out of <code>sudo</code>! The clean fix was creating a dedicated <code>myansibleuser</code> account with passwordless <code>sudo</code> and dedicated ED25519 SSH keys, keeping personal human accounts separate and password-protected.
+        </div>
+
+        <div class="story-box">
+          <p><strong>Digital Trust &amp; Border Controls</strong></p>
+          <p>
+            "I previously worked on ReadID at Signicat. During a project for a Norwegian bank, I traveled through Harwich border control so often that I became a familiar face. One day, a new Border Force officer asked what I was doing. My answer: <em>'Checking passports. Just like you.'</em>
+          </p>
+          <p>
+            Behind him, his supervisor smiled and waved me through. He didn't know me personally—he trusted the established process. Trust begins with verified identity. In our cluster, certificates do the exact same thing."
+          </p>
+        </div>
+
+        <p>
+          To manage TLS certificates across Elasticsearch nodes without taking ourselves too seriously, the automated PKI pays explicit tribute to Douglas Adams’ <em>Hitchhiker’s Guide to the Galaxy</em>. Leaf certificates are issued by the <strong>B.I.R.D. (BIRD Interstellar Recursive Defenestration) Root CA</strong> under the authority of the <em>Vogon Deep-Space Avian &amp; DTN Transit Board (RFC 1149 / RFC 9171)</em>. Behind the jokes lies a zero-touch cryptographic foundation issuing mTLS node certificates and local browser trust files.
+        </p>
+      </section>
+
+      <!-- BRANCH COMPARISON & TECHNICAL HIGHLIGHTS -->
+      <section>
+        <h2>Repository Branch Breakdown</h2>
+        <div class="grid-two">
           <div class="card">
-            <h3>mik</h3>
-            <ul>
-              <li><strong>Model:</strong> HP EliteDesk 800 G4[cite: 1]</li>
-              <li><strong>CPU:</strong> Intel i5-8500 (65W)[cite: 1]</li>
-              <li><strong>RAM:</strong> 64 GB[cite: 1]</li>
+            <h3><span class="badge">main</span> Base OS &amp; Kernel Tuning</h3>
+            <ul style="list-style-type: square; padding-left: 1.25rem; font-size: 0.9rem; color: var(--text-muted);">
+              <li><strong>Mitigations Off:</strong> Disables Spectre/Meltdown kernel mitigations (<code>mitigations=off</code>) to recover up to 25% CPU performance in an isolated homelab.</li>
+              <li><strong>NVMe Sleep Fix:</strong> Sets <code>nvme_core.default_ps_max_latency_us=0</code> to stop deep power-saving states from dropping drives into read-only mode.</li>
+              <li><strong>Intel Plundervolt Handling:</strong> Safely removes software undervolting to prevent systemd service crashes caused by HP BIOS microcode locks.</li>
+              <li><strong>USB Network Routing:</strong> Configures <code>192.168.107.0/24</code> for inter-node transport with zero default gateway conflicts.</li>
             </ul>
-            <span class="tag">Primary Master</span>
           </div>
 
           <div class="card">
-            <h3>mak</h3>
-            <ul>
-              <li><strong>Model:</strong> HP ProDesk 600 G4[cite: 1]</li>
-              <li><strong>CPU:</strong> Intel i5-8500T (35W)[cite: 1]</li>
-              <li><strong>RAM:</strong> 32 GB[cite: 1]</li>
+            <h3><span class="badge">elastic-direct</span> Native Systemd Stack</h3>
+            <ul style="list-style-type: square; padding-left: 1.25rem; font-size: 0.9rem; color: var(--text-muted);">
+              <li><strong>Native Arch PKGBUILDs:</strong> Compiles Elasticsearch and Kibana directly into <code>.pkg.tar.zst</code> packages using custom Jinja2 templates.</li>
+              <li><strong>Native Systemd Services:</strong> Runs directly on host, without Docker/Kubernetes containers.</li>
+              <li><strong>Automated CA &amp; Token Handling:</strong> Generates Root CA certificates, exports browser trust files to <code>~/Desktop</code>, and fetches <code>kibana-ansible-token</code> dynamically over HTTPS.</li>
+              <li><strong>Dual-Subnet Binding:</strong> Restricts node transport sync (port 9300) strictly to the fast 2.5 GbE USB network via UFW rules.</li>
             </ul>
-            <span class="tag">Worker Node</span>
-          </div>
-
-          <div class="card">
-            <h3>muk</h3>
-            <ul>
-              <li><strong>Model:</strong> HP ProDesk 400 G4[cite: 1]</li>
-              <li><strong>CPU:</strong> Intel i5-8500T (35W)[cite: 1]</li>
-              <li><strong>RAM:</strong> 16 GB[cite: 1]</li>
-            </ul>
-            <span class="tag">Worker / Ingress</span>
           </div>
         </div>
       </section>
 
+      <!-- SINGLE COMMAND LIFECYCLE -->
       <section>
-        <h2>Key Features</h2>
-        <ul>
-          <li><strong>Declarative Automation:</strong> Agentless configuration using Ansible[cite: 1].</li>
-          <li><strong>CachyOS Base:</strong> Custom kernel parameter tuning (`mitigations=off`, `i915` GPU configuration, NVMe power state latency)[cite: 1].</li>
-          <li><strong>USB Networking:</strong> Isolated 2.5 GbE inter-node cluster network configured via NetworkManager without default gateway conflicts[cite: 11].</li>
-          <li><strong>ADR Tracked:</strong> Architectural choices recorded directly via Architecture Decision Records[cite: 1].</li>
+        <h2>Declarative Lifecycle Execution</h2>
+        <p>Management is clean, simple, and 100% idempotent:</p>
+        <ul style="list-style-type: square; padding-left: 1.25rem; font-size: 0.95rem; color: var(--text-muted);">
+          <li><code>./controller-setup.yml</code> — Creates dedicated local ED25519 SSH keys.</li>
+          <li><code>./ansible-user-setup.yml -K</code> — Bootstraps the automation account (requires password once).</li>
+          <li><code>./setup.yml</code> — Builds packages, issues certificates, tunes kernel parameters, and starts services.</li>
+          <li><code>./reboot.yml</code> — Executes rolling single-node restarts using <code>--limit</code>.</li>
+          <li><code>./teardown.yml</code> — Gracefully stops systemd services, removes pacman packages, and purges credentials.</li>
         </ul>
+
+        <!-- CLIFFHANGER & WHAT'S NEXT SECTION -->
+        <div class="teaser-box">
+          <h3>⚡ What's Next? Jina Ebook Vectorization &amp; Cluster Inference</h3>
+          <p style="font-size: 0.95rem; color: var(--text);">
+            Now that the bare-metal CachyOS cluster is tuned and the isolated 2.5 GbE transport network is active, we are tackling two major workloads across the 3 nodes:
+          </p>
+          <ul style="list-style-type: square; padding-left: 1.25rem; font-size: 0.88rem; color: var(--text-muted);">
+            <li><strong>Jina AI Ebook Vector Pipeline:</strong> Harnessing <strong>Jina AI embedding models</strong>
+              across both Intel UHD 630 iGPUs (via Vulkan) and AVX2 CPU cores simultaneously. We vectorize entire Calibre EPUB ebooks into Elasticsearch 9.</li>
+            <li><strong>Distributed LLM Inference (160 GB RAM Pool):</strong> Clustering <code>mik</code>, <code>mak</code>, and <code>muk</code> over 2.5 GbE RPC to run quantized 70B+ parameter models across pooled host RAM via <code>llama.cpp</code>.</li>
+          </ul>
+          <p style="font-size: 0.9rem; font-weight: 600; color: var(--accent); margin-top: 0.75rem; margin-bottom: 0;">
+            Can integrated mini-PC iGPUs and 2.5 GbE USB networks handle high-throughput RAG indexing and local AI
+            inference? Stay tuned for the next experiment.
+          </p>
+        </div>
       </section>
     </main>
 
     <footer>
-      <p>&copy; 2026 Hans Kruse[cite: 2] &bull; Released under the MIT License[cite: 2]</p>
+      <p>&copy; 2026 Hans Kruse &bull; Released under the MIT License</p>
     </footer>
   </div>
 
