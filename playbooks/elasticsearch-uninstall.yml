@@ -3,21 +3,49 @@
 - name: Uninstall Elasticsearch from Cluster Nodes.
   hosts: cluster_nodes
   become: true
+
   tasks:
     - name: End play for nodes without the elasticsearch_node role
       ansible.builtin.meta: end_host
       when: "'elasticsearch_node' not in (cluster_roles | default([]))"
+
+    # 1. Stop and Disable Service
     - name: Ensure Elasticsearch service is stopped and disabled
       ansible.builtin.systemd:
         name: elasticsearch
         state: stopped
         enabled: false
       failed_when: false
+
+    # 2. Revert Firewall Rules
+    - name: Remove Elasticsearch Transport (9300) UFW rules for peer cluster IPs
+      community.general.ufw:
+        rule: allow
+        port: '9300'
+        proto: tcp
+        from_ip: "{{ hostvars[item]['cluster_ip'] }}"
+        state: absent
+      loop: "{{ groups['cluster_nodes'] }}"
+      when: "'elasticsearch_node' in (hostvars[item]['cluster_roles'] | default([]))"
+      failed_when: false
+
+    - name: Remove Elasticsearch REST API (9200) UFW rules for management subnet
+      community.general.ufw:
+        rule: allow
+        port: '9200'
+        proto: tcp
+        from_ip: "{{ elasticsearch_ip.split('.')[0:3] | join('.') }}.0/24"
+        state: absent
+      failed_when: false
+
+    # 3. Package Removal
     - name: Uninstall Elasticsearch package via pacman
       community.general.pacman:
         name: elasticsearch
         state: absent
-    - name: Remove Elasticsearch configuration, log, and data directories
+
+    # 4. Directory & State Removal
+    - name: Remove Elasticsearch configuration, log, data, and installation directories
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
@@ -26,11 +54,14 @@
         - /var/lib/elasticsearch
         - /var/log/elasticsearch
         - /usr/share/elasticsearch
+
+    # 5. User & Group Removal
     - name: Remove elasticsearch user
       ansible.builtin.user:
         name: elasticsearch
         state: absent
         remove: true
+
     - name: Remove elasticsearch group
       ansible.builtin.group:
         name: elasticsearch

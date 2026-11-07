@@ -1,0 +1,103 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Configure USB-C Cluster Network & Verify Interface State
+  hosts: cluster_nodes
+  become: true
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Ensure NetworkManager is Present and Running
+    # -------------------------------------------------------------------------
+    - name: Ensure NetworkManager package is present
+      community.general.pacman:
+        name: networkmanager
+        state: present
+
+    - name: Ensure NetworkManager service is enabled and running
+      ansible.builtin.systemd:
+        name: NetworkManager
+        enabled: true
+        state: started
+
+    # -------------------------------------------------------------------------
+    # 2. Dynamic Dongle Discovery
+    # -------------------------------------------------------------------------
+    - name: Identify active primary management interface
+      ansible.builtin.set_fact:
+        mgmt_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+
+    - name: Discover physical ethernet interface excluding management and loopback
+      ansible.builtin.set_fact:
+        discovered_usb_iface: >-
+          {{
+            ansible_facts['interfaces']
+            | reject('equalto', 'lo')
+            | reject('equalto', mgmt_interface)
+            | select('match', '^(eth|en|enp|wlx|usb).*')
+            | list
+            | first
+          }}
+
+    - name: Verify a valid USB dongle interface was discovered
+      ansible.builtin.assert:
+        that:
+          - discovered_usb_iface is defined
+          - discovered_usb_iface | length > 0
+        fail_msg: "No available secondary USB ethernet interface found on host {{ inventory_hostname }}."
+
+    # -------------------------------------------------------------------------
+    # 3. Derive Gateway & Apply Network Configuration
+    # -------------------------------------------------------------------------
+    - name: Calculate gateway IP from subnet (.1 address)
+      ansible.builtin.set_fact:
+        derived_gateway: "{{ cluster_ip.split('.')[0:3] | join('.') }}.1"
+
+    - name: Configure static IP on discovered USB interface
+      community.general.nmcli:
+        conn_name: "{{ cluster_connection_name }}"
+        ifname: "{{ discovered_usb_iface }}"
+        type: ethernet
+        ip4: "{{ cluster_ip }}/24"
+        gw4: "{{ derived_gateway }}"
+        state: present
+
+    - name: Force activation of cluster connection profile
+      ansible.builtin.command:
+        cmd: "nmcli connection up '{{ cluster_connection_name }}'"
+      register: nmcli_up
+      changed_when: "'Connection successfully activated' in nmcli_up.stdout"
+
+    # -------------------------------------------------------------------------
+    # 4. Reliable Non-Ping Verification & Assertions
+    # -------------------------------------------------------------------------
+    - name: Verify connection profile active state in NetworkManager
+      ansible.builtin.command:
+        cmd: "nmcli connection show --active"
+      register: nmcli_active
+      changed_when: false
+      failed_when: cluster_connection_name not in nmcli_active.stdout
+
+    - name: Verify physical link state up via ip-link
+      ansible.builtin.command:
+        cmd: "ip link show dev {{ discovered_usb_iface }}"
+      register: link_state
+      changed_when: false
+      failed_when: "'state UP' not in link_state.stdout and 'LOWER_UP' not in link_state.stdout"
+
+    - name: Verify static IP address assigned to interface
+      ansible.builtin.command:
+        cmd: "ip -4 addr show dev {{ discovered_usb_iface }}"
+      register: ip_state
+      changed_when: false
+      failed_when: cluster_ip not in ip_state.stdout
+
+    - name: Display cluster network verification summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "SUCCESS: {{ inventory_hostname }} cluster network verified!"
+          - "Interface: {{ discovered_usb_iface }} (enp0s20f0u5)"
+          - "Assigned IP: {{ cluster_ip }}/24"
+          - "Profile '{{ cluster_connection_name }}' ACTIVE"
+          - "Physical Link State: UP"
+          - "=========================================================="

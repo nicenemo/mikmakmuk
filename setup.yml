@@ -13,6 +13,9 @@
 - name: Import Kernel Setup Playbook
   ansible.builtin.import_playbook: playbooks/kernel-setup.yml
 
+- name: Import Network Setup Playbook
+  ansible.builtin.import_playbook: playbooks/network-setup.yml
+
 - name: Import CA Setup Playbook
   ansible.builtin.import_playbook: playbooks/ca-setup.yml
 
