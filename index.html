@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mik Mak Muk Cluster</title>
+  <meta name="description" content="Baseline Ansible automation for a 3-node HP EliteDesk/ProDesk Mini cluster running CachyOS.">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #7dd3fc;
+      --branch-bg: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 2.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1.5rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .github-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background-color: var(--accent);
+      color: #0f172a;
+      padding: 0.6rem 1.2rem;
+      border-radius: 6px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+    }
+
+    .github-btn:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .github-btn.secondary {
+      background-color: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .github-btn.secondary:hover {
+      background-color: var(--border);
+      color: var(--accent-hover);
+    }
+
+    .github-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    section {
+      margin-bottom: 2.5rem;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    .branches-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .branch-item {
+      margin-bottom: 1rem;
+    }
+
+    .branch-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .branch-name {
+      font-family: monospace;
+      font-size: 1.05rem;
+      color: var(--accent);
+      background-color: var(--branch-bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+    }
+
+    .hardware-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+
+    .card h3 {
+      font-size: 1.2rem;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+
+    .card ul {
+      list-style: none;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .card ul li {
+      margin-bottom: 0.3rem;
+    }
+
+    .card ul li strong {
+      color: var(--text);
+    }
+
+    .tag {
+      display: inline-block;
+      background-color: rgba(56, 189, 248, 0.1);
+      color: var(--accent);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+    }
+
+    footer {
+      margin-top: 4rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Mik Mak Muk</h1>
+      <p class="subtitle">Bare-metal host automation, low-level kernel tuning, and USB networking for a 3-node mini PC cluster running CachyOS.</p>
+
+      <div class="btn-group">
+        <a href="https://github.com/nicenemo/mikmakmuk" class="github-btn" target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          Repository (main)
+        </a>
+        <a href="https://github.com/nicenemo/mikmakmuk/tree/elastic-direct" class="github-btn secondary" target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          elastic-direct Branch
+        </a>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <h2>Project Overview</h2>
+        <p>
+          <strong>Mik Mak Muk</strong> provides baseline Ansible automation for a 3-node HP EliteDesk and ProDesk Mini cluster[cite: 1].
+          It manages hardware optimization, GPU video acceleration, and NVMe power states at the host operating system level prior to workload deployment[cite: 1].
+        </p>
+      </section>
+
+      <section>
+        <h2>Repository Branches</h2>
+        <div class="branches-card">
+          <div class="branch-item">
+            <p><span class="branch-name">main</span></p>
+            <p>Handles the core base OS setup, kernel-level optimizations (`mitigations=off`, `i915` GPU configuration, NVMe latency parameters), and configures the dedicated USB-C cluster networking (VLAN 107)[cite: 1, 11].</p>
+          </div>
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 1rem 0;">
+          <div class="branch-item">
+            <p><span class="branch-name">elastic-direct</span></p>
+            <p>Extends the baseline setup to deploy and configure a bare-metal <strong>Elasticsearch &amp; Kibana cluster</strong> running directly across the host nodes over the isolated USB cluster transport network[cite: 4, 8, 11].</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Hardware Nodes</h2>
+        <div class="hardware-grid">
+          <div class="card">
+            <h3>mik</h3>
+            <ul>
+              <li><strong>Model:</strong> HP EliteDesk 800 G4[cite: 1]</li>
+              <li><strong>CPU:</strong> Intel i5-8500 (65W)[cite: 1]</li>
+              <li><strong>RAM:</strong> 64 GB[cite: 1]</li>
+            </ul>
+            <span class="tag">Primary Master</span>
+          </div>
+
+          <div class="card">
+            <h3>mak</h3>
+            <ul>
+              <li><strong>Model:</strong> HP ProDesk 600 G4[cite: 1]</li>
+              <li><strong>CPU:</strong> Intel i5-8500T (35W)[cite: 1]</li>
+              <li><strong>RAM:</strong> 32 GB[cite: 1]</li>
+            </ul>
+            <span class="tag">Worker Node</span>
+          </div>
+
+          <div class="card">
+            <h3>muk</h3>
+            <ul>
+              <li><strong>Model:</strong> HP ProDesk 400 G4[cite: 1]</li>
+              <li><strong>CPU:</strong> Intel i5-8500T (35W)[cite: 1]</li>
+              <li><strong>RAM:</strong> 16 GB[cite: 1]</li>
+            </ul>
+            <span class="tag">Worker / Ingress</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Key Features</h2>
+        <ul>
+          <li><strong>Declarative Automation:</strong> Agentless configuration using Ansible[cite: 1].</li>
+          <li><strong>CachyOS Base:</strong> Custom kernel parameter tuning (`mitigations=off`, `i915` GPU configuration, NVMe power state latency)[cite: 1].</li>
+          <li><strong>USB Networking:</strong> Isolated 2.5 GbE inter-node cluster network configured via NetworkManager without default gateway conflicts[cite: 11].</li>
+          <li><strong>ADR Tracked:</strong> Architectural choices recorded directly via Architecture Decision Records[cite: 1].</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>&copy; 2026 Hans Kruse[cite: 2] &bull; Released under the MIT License[cite: 2]</p>
+    </footer>
+  </div>
+
+</body>
+</html>
