@@ -34,7 +34,6 @@
       ansible.builtin.debug:
         msg: "Elasticsearch version successfully verified: {{ resolved_elk_version }}"
 
-    # Define build path variables
     - name: Set path facts for local build
       ansible.builtin.set_fact:
         build_dir: "{{ project_root }}/build/elasticsearch"

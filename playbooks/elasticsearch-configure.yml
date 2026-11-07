@@ -135,9 +135,6 @@
       run_once: true
       no_log: true
 
-    # -------------------------------------------------------------------------
-    # Cluster-Wide Health Verification
-    # -------------------------------------------------------------------------
     - name: Verify Elasticsearch cluster health endpoint on each node
       ansible.builtin.uri:
         url: "https://{{ (hostvars[inventory_hostname]['elasticsearch_ip'] | default(ansible_host)).split('/')[0] }}:9200/_cluster/health"
