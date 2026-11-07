@@ -1,7 +1,14 @@
 #!/usr/bin/env ansible-playbook
 ---
-# 1. Clean up base firewall rules and system dependencies
+# =============================================================================
+# Master Homelab Teardown Orchestrator
+# =============================================================================
+
+- name: Import Network Teardown Playbook
+  ansible.builtin.import_playbook: playbooks/network-teardown.yml
+
 - name: Import Kernel Teardown Playbook
   ansible.builtin.import_playbook: playbooks/kernel-teardown.yml
+
 - name: Import Base Teardown Playbook
   ansible.builtin.import_playbook: playbooks/base-teardown.yml

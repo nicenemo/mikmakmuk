@@ -1,0 +1,11 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Remove USB-C Cluster Network Configuration
+  hosts: cluster_nodes
+  become: true
+
+  tasks:
+    - name: Remove cluster NetworkManager connection profile
+      community.general.nmcli:
+        conn_name: "{{ cluster_connection_name }}"
+        state: absent

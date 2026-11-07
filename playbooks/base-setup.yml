@@ -75,7 +75,7 @@
     # -------------------------------------------------------------------------
     - name: Deploy PowerTOP auto-tune systemd service unit
       ansible.builtin.copy:
-        src: powertop.service
+        src: files/powertop.service
         dest: /etc/systemd/system/powertop.service
         owner: root
         group: root

@@ -1,0 +1,72 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Configure USB-C Cluster Network
+  hosts: cluster_nodes
+  become: true
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Ensure NetworkManager is Present and Running
+    # -------------------------------------------------------------------------
+    - name: Ensure NetworkManager package is present
+      community.general.pacman:
+        name: networkmanager
+        state: present
+
+    - name: Ensure NetworkManager service is enabled and running
+      ansible.builtin.systemd:
+        name: NetworkManager
+        enabled: true
+        state: started
+
+    # -------------------------------------------------------------------------
+    # 2. Dynamic Dongle Discovery
+    # -------------------------------------------------------------------------
+    - name: Identify active primary management interface
+      ansible.builtin.set_fact:
+        mgmt_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+
+    - name: Discover physical ethernet interface excluding management and loopback
+      ansible.builtin.set_fact:
+        discovered_usb_iface: >-
+          {{
+            ansible_facts['interfaces']
+            | reject('equalto', 'lo')
+            | reject('equalto', mgmt_interface)
+            | select('match', '^(eth|en|enp|wlx|usb).*')
+            | list
+            | first
+          }}
+
+    - name: Verify a valid USB dongle interface was discovered
+      ansible.builtin.assert:
+        that:
+          - discovered_usb_iface is defined
+          - discovered_usb_iface | length > 0
+        fail_msg: "No available secondary USB ethernet interface found on host {{ inventory_hostname }}."
+
+    # -------------------------------------------------------------------------
+    # 3. Derive Gateway & Apply Static IP Configuration
+    # -------------------------------------------------------------------------
+    - name: Calculate gateway IP from subnet (.1 address)
+      ansible.builtin.set_fact:
+        derived_gateway: "{{ cluster_ip.split('.')[0:3] | join('.') }}.1"
+
+    - name: Configure static IP on discovered USB interface
+      community.general.nmcli:
+        conn_name: "{{ cluster_connection_name }}"
+        ifname: "{{ discovered_usb_iface }}"
+        type: ethernet
+        ip4: "{{ cluster_ip }}/24"
+        gw4: "{{ derived_gateway }}"
+        state: present
+      notify: Reload cluster network connection
+
+  # ---------------------------------------------------------------------------
+  # Handlers
+  # ---------------------------------------------------------------------------
+  handlers:
+    - name: Reload cluster network connection
+      ansible.builtin.command:
+        cmd: "systemd-run --on-active=2s nmcli connection up '{{ cluster_connection_name }}'"
+      changed_when: false

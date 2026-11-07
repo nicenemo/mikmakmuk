@@ -5,6 +5,9 @@
   become: true
 
   tasks:
+    # -------------------------------------------------------------------------
+    # 1. Stop and Clean PowerTOP Service
+    # -------------------------------------------------------------------------
     - name: Stop and disable hardware management services
       ansible.builtin.systemd:
         name: powertop
@@ -18,9 +21,17 @@
         state: absent
       notify: Reload systemd daemon teardown
 
+    # -------------------------------------------------------------------------
+    # 2. Package Removal (Protecting Critical Core Services)
+    # -------------------------------------------------------------------------
     - name: Remove common_packages and node_packages (excluding NetworkManager)
       community.general.pacman:
-        name: "{{ ((common_packages | default([])) + (node_packages | default([]))) | reject('equalto', 'networkmanager') | list }}"
+        name: >-
+          {{
+            ((common_packages | default([])) + (node_packages | default([])))
+            | reject('match', '(?i)^networkmanager$')
+            | list
+          }}
         state: absent
 
     - name: Remove standalone hardware and power tools
@@ -30,9 +41,12 @@
           - cpupower
         state: absent
 
-    - name: Flush handlers
+    - name: Flush handlers to reload systemd daemon
       ansible.builtin.meta: flush_handlers
 
+  # ---------------------------------------------------------------------------
+  # Handlers
+  # ---------------------------------------------------------------------------
   handlers:
     - name: Reload systemd daemon teardown
       ansible.builtin.systemd:
