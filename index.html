@@ -412,7 +412,8 @@
               <li><strong>Native Arch PKGBUILDs:</strong> Compiles Elasticsearch and Kibana directly into <code>.pkg.tar.zst</code> packages using custom Jinja2 templates.</li>
               <li><strong>Native Systemd Services:</strong> Runs directly on host, without Docker/Kubernetes containers.</li>
               <li><strong>Automated CA &amp; Token Handling:</strong> Generates Root CA certificates, exports browser trust files to <code>~/Desktop</code>, and fetches <code>kibana-ansible-token</code> dynamically over HTTPS.</li>
-              <li><strong>Dual-Subnet Binding:</strong> Restricts node transport sync (port 9300) strictly to the fast 2.5 GbE USB network via UFW rules.</li>
+              <li><strong>Dual-Subnet Binding:</strong> Restricts node transport sync (port 9300) strictly to the fast 2.5 GbE USB network.</li>
+              <li><strong>UFW managed firewall settings</strong> I did not forget setup and teardown of firewall rules.</li>
             </ul>
           </div>
         </div>
