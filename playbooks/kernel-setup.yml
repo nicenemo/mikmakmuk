@@ -1,0 +1,50 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Apply Kernel Command Line and Module Configuration
+  hosts: cluster_nodes
+  become: true
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Kernel Command Line Drop-Ins & Tuning
+    # -------------------------------------------------------------------------
+    - name: Ensure /etc/cmdline.d directory exists
+      ansible.builtin.file:
+        path: /etc/cmdline.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure hardware kernel tuning drop-in
+      ansible.builtin.copy:
+        src: homelab-tuning.conf
+        dest: /etc/cmdline.d/homelab-tuning.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Regenerate initramfs
+
+    # -------------------------------------------------------------------------
+    # 2. Kernel Module Configuration & Loading
+    # -------------------------------------------------------------------------
+    - name: Ensure i915 module is set to load at boot
+      ansible.builtin.copy:
+        src: igpu.conf
+        dest: /etc/modules-load.d/igpu.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Load i915 module
+      community.general.modprobe:
+        name: i915
+        state: present
+
+  # ---------------------------------------------------------------------------
+  # Handlers
+  # ---------------------------------------------------------------------------
+  handlers:
+    - name: Regenerate initramfs
+      ansible.builtin.command: mkinitcpio -P
+      changed_when: true

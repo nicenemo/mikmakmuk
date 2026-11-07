@@ -5,3 +5,5 @@
 # -----------------------------------------------------------------------------
 - name: Import Base Setup Playbook
   ansible.builtin.import_playbook: playbooks/base-setup.yml
+- name: Kernel Setup Playbook
+  ansible.builtin.import_playbook: playbooks/kernel-setup.yml

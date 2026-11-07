@@ -71,40 +71,7 @@
         state: present
 
     # -------------------------------------------------------------------------
-    # 2. Kernel Command Line & Hardware Tuning
-    # -------------------------------------------------------------------------
-    - name: Ensure /etc/cmdline.d directory exists
-      ansible.builtin.file:
-        path: /etc/cmdline.d
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-
-    - name: Configure hardware kernel tuning drop-in
-      ansible.builtin.copy:
-        src: homelab-tuning.conf
-        dest: /etc/cmdline.d/homelab-tuning.conf
-        owner: root
-        group: root
-        mode: '0644'
-      notify: Regenerate initramfs
-
-    - name: Ensure i915 module is set to load at boot
-      ansible.builtin.copy:
-        src: igpu.conf
-        dest: /etc/modules-load.d/igpu.conf
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Load i915 module
-      community.general.modprobe:
-        name: i915
-        state: present
-
-    # -------------------------------------------------------------------------
-    # 3. Power & Thermal Management
+    # 2. Power & Thermal Management
     # -------------------------------------------------------------------------
     - name: Deploy PowerTOP auto-tune systemd service unit
       ansible.builtin.copy:
@@ -122,13 +89,9 @@
         state: started
 
   # ---------------------------------------------------------------------------
-  # Handlers (Executed at end of play)
+  # Handlers
   # ---------------------------------------------------------------------------
   handlers:
     - name: Reload systemd daemon
       ansible.builtin.systemd:
         daemon_reload: true
-
-    - name: Regenerate initramfs
-      ansible.builtin.command: mkinitcpio -P
-      changed_when: true
