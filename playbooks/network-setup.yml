@@ -3,6 +3,8 @@
 - name: Configure USB-C Cluster Network & Verify Interface State
   hosts: cluster_nodes
   become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
 
   tasks:
     # -------------------------------------------------------------------------
@@ -68,7 +70,7 @@
       changed_when: "'Connection successfully activated' in nmcli_up.stdout"
 
     # -------------------------------------------------------------------------
-    # 4. Reliable Non-Ping Verification & Assertions
+    # 4. Reliable Non-Ping Verification & Link Speed Assertion
     # -------------------------------------------------------------------------
     - name: Verify connection profile active state in NetworkManager
       ansible.builtin.command:
@@ -91,13 +93,25 @@
       changed_when: false
       failed_when: cluster_ip not in ip_state.stdout
 
+    - name: Query negotiated link speed via sysfs
+      ansible.builtin.command:
+        cmd: "cat /sys/class/net/{{ discovered_usb_iface }}/speed"
+      register: link_speed_raw
+      changed_when: false
+      failed_when: false
+
+    - name: Set formatted link speed fact
+      ansible.builtin.set_fact:
+        negotiated_link_speed: "{{ link_speed_raw.stdout ~ ' Mbps' if (link_speed_raw.rc == 0 and link_speed_raw.stdout | length > 0) else 'Unknown (Link Down/Unnegotiated)' }}"
+
     - name: Display cluster network verification summary
       ansible.builtin.debug:
         msg:
           - "=========================================================="
           - "SUCCESS: {{ inventory_hostname }} cluster network verified!"
-          - "Interface: {{ discovered_usb_iface }} (enp0s20f0u5)"
+          - "Interface: {{ discovered_usb_iface }}"
           - "Assigned IP: {{ cluster_ip }}/24"
           - "Profile '{{ cluster_connection_name }}' ACTIVE"
           - "Physical Link State: UP"
+          - "Negotiated Link Speed: {{ negotiated_link_speed }}"
           - "=========================================================="

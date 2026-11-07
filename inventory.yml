@@ -16,7 +16,7 @@ all:
     cert_organization: "Vogon Deep-Space Avian & DTN Transit Board (RFC 1149 / RFC 9171)"
     cert_organizational_unit: "Office for Directing DTN Bundle Custody Transfers of WireGuard-over-BLE HID Service 0x1812 Page 0x20 (HUD) over hid-ebpf to the Outer Rim"
     cert_root_ca_cn: "B.I.R.D. (BIRD Interstellar Recursive Defenestration) Root CA"
-    elk_version: 9.5.5
+    elk_version: 9.5.6
 
     es_heap_size_gb: "{{ [ [ ((ansible_facts['memtotal_mb'] | default(ram_gb * 1024 if ram_gb is defined else 4096)) / 2 / 1024) | round(0, 'floor') | int, 31 ] | min, 1 ] | max }}"
     kibana_memory_mb: 2048

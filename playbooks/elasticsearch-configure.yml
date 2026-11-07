@@ -105,15 +105,17 @@
       ansible.builtin.meta: flush_handlers
 
     # -------------------------------------------------------------------------
-    # 3. Non-Ping Socket Verification on Management IP
+    # 3. Non-Ping Socket & API Readiness Verification on Management IP
     # -------------------------------------------------------------------------
-    - name: Wait for TCP port 9200 to start listening on elasticsearch_ip
-      ansible.builtin.wait_for:
-        host: "{{ elasticsearch_ip }}"
-        port: 9200
-        state: started
-        delay: 5
-        timeout: 60
+    - name: Wait for Elasticsearch HTTP API to become responsive (handling startup 503s)
+      ansible.builtin.uri:
+        url: "https://{{ elasticsearch_ip }}:9200/"
+        validate_certs: false
+        status_code: [200, 401]
+      register: es_api_ready
+      until: es_api_ready.status is defined and es_api_ready.status in [200, 401]
+      retries: 30
+      delay: 5
 
     - name: Check if generated elastic password is already active
       ansible.builtin.uri:
@@ -122,8 +124,11 @@
         password: "{{ es_elastic_password }}"
         force_basic_auth: true
         validate_certs: false
-        status_code: [200]
+        status_code: [200, 401]
       register: es_auth_check
+      until: es_auth_check.status is defined and es_auth_check.status in [200, 401]
+      retries: 12
+      delay: 5
       ignore_errors: true
       run_once: true
 
@@ -135,7 +140,7 @@
         --url "https://{{ elasticsearch_ip }}:9200"
         --interactive
         --batch
-      when: es_auth_check.status is not defined or es_auth_check.status != 200
+      when: es_auth_check.status is not defined or es_auth_check.status == 401
       run_once: true
 
     - name: Verify Elasticsearch cluster health endpoint over management network
@@ -153,24 +158,24 @@
       delay: 5
 
     # -------------------------------------------------------------------------
-    # 4. Homelab Unredacted Credentials Output
+    # 4. Cluster Summary Output
     # -------------------------------------------------------------------------
-    - name: Display cluster health and unredacted credentials
-      ansible.builtin.shell: >
-        echo "==========================================================" &&
-        echo "Elasticsearch Node {{ inventory_hostname }} is HEALTHY!" &&
-        echo "REST API IP: {{ elasticsearch_ip }}" &&
-        echo "Transport Cluster IP: {{ cluster_ip }}" &&
-        echo "Cluster Status: {{ es_health_check.json.status }}" &&
-        echo "Number of Nodes: {{ es_health_check.json.number_of_nodes }}" &&
-        echo "" &&
-        echo "Elasticsearch 'elastic' user password:" &&
-        echo "  {{ es_elastic_password }}" &&
-        echo "" &&
-        echo "Test command over management network:" &&
-        echo "  curl -k -u elastic:{{ es_elastic_password }} https://{{ elasticsearch_ip }}:9200/_cluster/health?pretty" &&
-        echo "=========================================================="
-      changed_when: false
+    - name: Display cluster health and connection summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "Elasticsearch Node {{ inventory_hostname }} is HEALTHY!"
+          - "REST API IP: {{ elasticsearch_ip }}"
+          - "Transport Cluster IP: {{ cluster_ip }}"
+          - "Cluster Status: {{ es_health_check.json.status }}"
+          - "Number of Nodes: {{ es_health_check.json.number_of_nodes }}"
+          - ""
+          - "Elasticsearch 'elastic' user password:"
+          - "  {{ es_elastic_password }}"
+          - ""
+          - "Test command over management network:"
+          - "  curl -k -u elastic:{{ es_elastic_password }} https://{{ elasticsearch_ip }}:9200/_cluster/health?pretty"
+          - "=========================================================="
 
   handlers:
     - name: Restart Elasticsearch
