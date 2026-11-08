@@ -1,0 +1,23 @@
+=========================================================================
+          CLUSTER NVME PCIE LINK SPEED & BANDWIDTH MATRIX
+=========================================================================
+{% for host in groups['cluster_nodes'] %}
+{% set m = hostvars[host].get('node_pcie_metrics', {}) %}
+{% set sta = m.lnk_sta | default('') %}
+{% if 'Speed 8GT/s' in sta and 'Width x4' in sta %}
+{% set p_status = 'Optimal (Operating at max Gen3 x4 platform limit)' %}
+{% elif 'Speed 16GT/s' in sta and 'Width x4' in sta %}
+{% set p_status = 'Optimal (Gen4 x4 active)' %}
+{% else %}
+{% set p_status = 'Suboptimal / Lane-Restricted Link' %}
+{% endif %}
+NODE: {{ host.upper() }}
+  NVMe Device Path         : {{ m.nvme_dev | default('N/A') }}
+  NVMe Drive Model         : {{ m.drive_model | default('N/A') }}
+  Max Drive Capability     : {{ m.lnk_cap | default('N/A') }}
+  Active Link Status       : {{ m.lnk_sta | default('N/A') }}
+  Platform Link Status     : {{ p_status }}
+
+-------------------------------------------------------------------------
+{% endfor %}
+=========================================================================

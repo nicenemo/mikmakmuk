@@ -37,6 +37,9 @@
 - name: Import Trim Teardown Playbook
   ansible.builtin.import_playbook: playbooks/trim-teardown.yml
 
+- name: Import FSTAB Teardown Playbook
+  ansible.builtin.import_playbook: playbooks/fstab-teardown.yml
+
 - name: Import Kernel Teardown Playbook
   ansible.builtin.import_playbook: playbooks/kernel-teardown.yml
 
