@@ -8,7 +8,7 @@
 
   tasks:
     # -------------------------------------------------------------------------
-    # 1. Stop and Disable Automated Maintenance (systemd fstrim.timer)
+    # 1. Stop and Disable Automated Maintenance Timer
     # -------------------------------------------------------------------------
     - name: "Stop and disable weekly fstrim.timer"
       ansible.builtin.systemd:
@@ -19,16 +19,28 @@
       register: timer_disable_res
 
     # -------------------------------------------------------------------------
-    # 2. Compile Teardown Telemetry
+    # 2. Remove Systemd Service Drop-In Overrides
+    # -------------------------------------------------------------------------
+    - name: "Remove fstrim systemd override directory"
+      ansible.builtin.file:
+        path: /etc/systemd/system/fstrim.service.d
+        state: absent
+      register: override_remove_res
+
+    - name: "Reload systemd daemon after configuration purge"
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: override_remove_res.changed
+
+    # -------------------------------------------------------------------------
+    # 3. Compile & Display Teardown Summary
     # -------------------------------------------------------------------------
     - name: "Store local node teardown facts"
       ansible.builtin.set_fact:
         trim_teardown_status:
           timer_state: "{{ 'Disabled & Stopped' if not timer_disable_res.failed else 'Failed / Not Installed' }}"
+          override_state: "{{ 'Removed' if override_remove_res.changed else 'Clean' }}"
 
-    # -------------------------------------------------------------------------
-    # 3. Display Teardown Summary
-    # -------------------------------------------------------------------------
     - name: "Display Storage TRIM Teardown Summary"
       ansible.builtin.debug:
         msg: "{{ lookup('template', project_root ~ '/templates/trim_teardown_report.j2').split('\n') }}"

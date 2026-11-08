@@ -1,16 +1,14 @@
 =========================================================================
-               CLUSTER STORAGE TRIM MAINTENANCE REPORT
+          CLUSTER SMART STORAGE TRIM & MAINTENANCE REPORT
 =========================================================================
 {% for host in groups['cluster_nodes'] %}
 NODE: {{ host.upper() }}
-{% set lines = hostvars[host].get('node_trim_results', []) %}
-{% if lines %}
-{% for line in lines %}
-  - {{ line }}
-{% endfor %}
-{% else %}
-  - No mount points trimmed.
-{% endif %}
+{% set m = hostvars[host].get('node_trim_metrics', {}) %}
+  Target Volume            : {{ m.target_mount | default('N/A') }}
+  Dynamic Trim Threshold   : {{ m.applied_threshold | default('N/A') }}
+  Trim Command Result      : {{ m.trim_output | default('N/A') }}
+  Timer State (Pre-Setup)  : {{ m.timer_pre_status | default('N/A') }}
+  Timer State (Post-Setup) : {{ m.timer_post_status | default('N/A') }}
 -------------------------------------------------------------------------
 {% endfor %}
 =========================================================================
