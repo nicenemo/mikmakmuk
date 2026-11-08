@@ -16,6 +16,9 @@
 - name: Import Network Setup Playbook
   ansible.builtin.import_playbook: playbooks/network-setup.yml
 
+- name: Import Iperf 3 Speedtest Playbook
+  ansible.builtin.import_playbook: playbooks/iperf3-speedtest.yml
+
 - name: Import CA Setup Playbook
   ansible.builtin.import_playbook: playbooks/ca-setup.yml
 
