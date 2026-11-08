@@ -6,8 +6,11 @@
 - name: Import Base Setup Playbook
   ansible.builtin.import_playbook: playbooks/base-setup.yml
 
-- name: Kernel Setup Playbook
+- name: Import Kernel Setup Playbook
   ansible.builtin.import_playbook: playbooks/kernel-setup.yml
+
+- name: Import Check Hardware Power Playbook
+  ansible.builtin.import_playbook: playbooks/check-hardware-power.yml
 
 - name: Import FSTAB Setup Playbook
   ansible.builtin.import_playbook: playbooks/fstab-setup.yml
