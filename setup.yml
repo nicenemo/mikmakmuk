@@ -13,6 +13,12 @@
 - name: Import Kernel Setup Playbook
   ansible.builtin.import_playbook: playbooks/kernel-setup.yml
 
+- name: Import SSD Trim Setup Playbook
+  ansible.builtin.import_playbook: playbooks/trim-setup.yml
+
+- name: Import SSD performance benchmark Playbook
+  ansible.builtin.import_playbook: playbooks/ssd-performance-benchmark.yml
+
 - name: Import Network Setup Playbook
   ansible.builtin.import_playbook: playbooks/network-setup.yml
 
