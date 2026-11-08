@@ -11,6 +11,7 @@ all:
       - btop
       - wget
       - networkmanager
+      - iperf3
     ca_valid_days: 3650
     leaf_valid_days: 200
     cert_organization: "Vogon Deep-Space Avian & DTN Transit Board (RFC 1149 / RFC 9171)"
