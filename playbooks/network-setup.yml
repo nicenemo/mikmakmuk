@@ -48,19 +48,14 @@
         fail_msg: "No available secondary USB ethernet interface found on host {{ inventory_hostname }}."
 
     # -------------------------------------------------------------------------
-    # 3. Derive Gateway & Apply Network Configuration (MTU 9000 Jumbo Frames)
+    # 3. Apply Dedicated Cluster Network Configuration (MTU 9000 Jumbo Frames)
     # -------------------------------------------------------------------------
-    - name: Calculate gateway IP from subnet (.1 address)
-      ansible.builtin.set_fact:
-        derived_gateway: "{{ cluster_ip.split('.')[0:3] | join('.') }}.1"
-
     - name: Configure static IP and MTU 9000 on discovered USB interface
       community.general.nmcli:
         conn_name: "{{ cluster_connection_name }}"
         ifname: "{{ discovered_usb_iface }}"
         type: ethernet
         ip4: "{{ cluster_ip }}/24"
-        gw4: "{{ derived_gateway }}"
         mtu: 9000
         state: present
 
