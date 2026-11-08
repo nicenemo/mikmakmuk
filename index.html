@@ -368,7 +368,11 @@
           <div class="card">
             <h3>Automated Network Benchmarking &amp; Routing</h3>
             <p style="font-size: 0.9rem;">
-              As the old Dutch proverb goes: <strong>"Meten is weten"</strong> (<em>"To measure is to know"</em>). We built an automated full-mesh <code>iperf3</code> benchmark playbook to verify line-rate throughput across both network tiers (1 GbE management and 2.5 GbE cluster interconnect).
+              As the old Dutch proverb goes: <strong>"Meten is weten"</strong> (<em>"To measure is to know"</em>).
+              We built an automated full-mesh <code>iperf3</code> benchmark playbook to verify line-rate throughput across both network tiers (1 GbE management and 2.5 GbE cluster interconnect).
+              With jumbo frames we get 2.48 Gbps. Without jumbo frames we get 2.36 Gbps. On the 1 gb link we get 0.93
+              Gbps.
+
             </p>
             <ul style="font-size: 0.9rem; padding-left: 1.1rem;">
               <li><strong>Jumbo Frames (MTU 9000):</strong> Configured exclusively on the isolated 2.5 GbE backend to eliminate L2-L4 protocol overhead and maximize TCP payload transfer speed (~2.36 Gbps payload saturation).</li>
