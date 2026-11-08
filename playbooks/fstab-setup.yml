@@ -1,0 +1,85 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: "Safely Update Btrfs Mount Options in /etc/fstab (CachyOS)"
+  hosts: cluster_nodes
+  become: true
+  vars:
+    # Default fallback options if node variable is omitted
+    default_btrfs_mount_opts: "noatime,compress=zstd:1,space_cache=v2"
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Fact Gathering & Pre-flight Checks
+    # -------------------------------------------------------------------------
+    - name: "Discover Btrfs root mount details"
+      ansible.builtin.setup:
+        gather_subset:
+          - mounts
+          - date_time
+
+    - name: "Extract root filesystem mount facts"
+      ansible.builtin.set_fact:
+        root_mount: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | first }}"
+
+    - name: "Verify target device is Btrfs"
+      ansible.builtin.assert:
+        that:
+          - root_mount.fstype == "btrfs"
+        fail_msg: "Host {{ inventory_hostname }} root filesystem is {{ root_mount.fstype }}, expected Btrfs!"
+
+    - name: "Get Filesystem UUID for root mount"
+      ansible.builtin.command: "blkid -s UUID -o value {{ root_mount.device }}"
+      register: root_uuid_cmd
+      changed_when: false
+
+    - name: "Set root filesystem UUID"
+      ansible.builtin.set_fact:
+        root_uuid: "{{ root_uuid_cmd.stdout | trim }}"
+
+    # -------------------------------------------------------------------------
+    # 2. Backup /etc/fstab Before Modification
+    # -------------------------------------------------------------------------
+    - name: "Create timestamped backup of /etc/fstab"
+      ansible.builtin.copy:
+        src: /etc/fstab
+        dest: "/etc/fstab.bak.{{ ansible_facts['date_time']['iso8601_basic_short'] }}"
+        remote_src: true
+        mode: '0644'
+
+    # -------------------------------------------------------------------------
+    # 3. Update /etc/fstab Mount Options Safely
+    # -------------------------------------------------------------------------
+    - name: "Update root Btrfs mount options in /etc/fstab"
+      ansible.posix.mount:
+        path: /
+        src: "UUID={{ root_uuid }}"
+        fstype: btrfs
+        opts: "{{ btrfs_mount_opts | default(default_btrfs_mount_opts) }}"
+        state: present
+
+    # -------------------------------------------------------------------------
+    # 4. Safety Validation & Remount Test
+    # -------------------------------------------------------------------------
+    - name: "Verify /etc/fstab syntax with findmnt"
+      ansible.builtin.command: "findmnt --verify --verbose"
+      register: findmnt_check
+      changed_when: false
+      failed_when: findmnt_check.rc != 0
+
+    - name: "Test remount of root filesystem"
+      ansible.builtin.command: "mount -o remount /"
+      register: remount_result
+      changed_when: false
+
+    - name: "Confirm active mount flags"
+      ansible.builtin.command: "findmnt -n -o OPTIONS /"
+      register: active_opts
+      changed_when: false
+
+    - name: "Display updated active mount configuration"
+      ansible.builtin.debug:
+        msg:
+          - "Host: {{ inventory_hostname }}"
+          - "UUID: {{ root_uuid }}"
+          - "Configured Options: {{ btrfs_mount_opts | default(default_btrfs_mount_opts) }}"
+          - "Active Mount Options: {{ active_opts.stdout }}"

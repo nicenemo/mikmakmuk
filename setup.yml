@@ -9,6 +9,9 @@
 - name: Kernel Setup Playbook
   ansible.builtin.import_playbook: playbooks/kernel-setup.yml
 
+- name: Import FSTAB Setup Playbook
+  ansible.builtin.import_playbook: playbooks/fstab-setup.yml
+
 - name: Import SSD Trim Setup Playbook
   ansible.builtin.import_playbook: playbooks/trim-setup.yml
 

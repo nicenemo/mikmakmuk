@@ -111,7 +111,7 @@
       changed_when: true
 
     # -------------------------------------------------------------------------
-    # 5. Teardown Benchmark Files & Immediate Active TRIM
+    # 5. Dynamic Btrfs TRIM & Post-Cleanup Status Check
     # -------------------------------------------------------------------------
     - name: "Purge benchmark test files from filesystem"
       ansible.builtin.file:
@@ -121,14 +121,29 @@
         - "{{ fio_seq_file }}"
         - "{{ fio_sync_file }}"
 
-    - name: "Execute active TRIM on test filesystem to clear benchmark artifacts"
+    - name: "Query Btrfs allocation state on root volume"
+      ansible.builtin.shell:
+        cmd: "btrfs filesystem usage -b / 2>/dev/null | awk '/Free \\(estimated\\):/ {print $3}' || echo '0'"
+      register: btrfs_free_bytes_raw
+      changed_when: false
+
+    - name: "Calculate optimal TRIM extent threshold"
+      ansible.builtin.set_fact:
+        calculated_min_trim: >-
+          {%- set free_gb = (btrfs_free_bytes_raw.stdout | float / 1073741824) -%}
+          {%- if free_gb > 100 -%}16M
+          {%- elif free_gb > 20 -%}8M
+          {%- else -%}2M
+          {%- endif -%}
+
+    - name: "Execute active TRIM on root volume using dynamic threshold"
       ansible.builtin.command:
-        cmd: "fstrim -v {{ bench_dir }}"
+        cmd: "fstrim -v -m {{ calculated_min_trim | trim }} /"
       changed_when: false
 
     - name: "Evaluate post-cleanup TRIM status (dry-run check)"
       ansible.builtin.shell:
-        cmd: "fstrim -v --dry-run {{ bench_dir }} 2>&1"
+        cmd: "fstrim -v -m {{ calculated_min_trim | trim }} --dry-run / 2>&1"
       register: fstrim_eval_raw
       changed_when: false
 
@@ -152,7 +167,7 @@
           drive_model: "{{ nvme_model_raw.stdout | trim }}"
           wear_pct: "{{ nvme_wear_raw.stdout | trim }}"
           tbw_written: "{{ nvme_tbw_raw.stdout | trim }}"
-          trim_recommendation: "{{ 'Trim Recommended (' ~ fstrim_eval_raw.stdout | trim ~ ')' if ('trimmed' in fstrim_eval_raw.stdout and not '0 B' in fstrim_eval_raw.stdout) else 'Trimmed / Up to Date' }}"
+          trim_recommendation: "{{ 'Trim Recommended (' ~ fstrim_eval_raw.stdout | trim ~ ')' if ('trimmed' in fstrim_eval_raw.stdout and not '0 B' in fstrim_eval_raw.stdout) else 'Trimmed / Up to Date (' ~ (calculated_min_trim | trim) ~ ' threshold)' }}"
           temp_before: "{{ temp_before_raw.stdout | trim }}"
           temp_after: "{{ temp_after_raw.stdout | trim }}"
           seq_write_mbs: "{{ (node_seq_json.jobs[0].write.bw_bytes / (1024 * 1024)) | round(2) }}"
