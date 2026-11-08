@@ -1,0 +1,25 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Revert Kernel Command Line and Module Configuration
+  hosts: cluster_nodes
+  become: true
+
+  tasks:
+    - name: Remove iGPU load module file
+      ansible.builtin.file:
+        path: /etc/modules-load.d/igpu.conf
+        state: absent
+
+    - name: Remove homelab cmdline kernel tuning configuration
+      ansible.builtin.file:
+        path: /etc/cmdline.d/homelab-tuning.conf
+        state: absent
+      notify: Regenerate initramfs teardown
+
+    - name: Flush handlers
+      ansible.builtin.meta: flush_handlers
+
+  handlers:
+    - name: Regenerate initramfs teardown
+      ansible.builtin.command: mkinitcpio -P
+      changed_when: true

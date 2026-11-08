@@ -1,0 +1,99 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Apply Base System Optimizations and Configuration
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Package Management & Keyring Maintenance
+    # -------------------------------------------------------------------------
+    - name: Initialize pacman keyring if missing or unpopulated
+      ansible.builtin.command:
+        cmd: pacman-key --init
+        creates: /etc/pacman.d/gnupg/trustdb.gpg
+
+    - name: Populate default Arch and CachyOS keyrings
+      ansible.builtin.command:
+        cmd: pacman-key --populate archlinux cachyos
+      changed_when: false
+
+    - name: Clean potentially corrupted pacman sync databases
+      ansible.builtin.file:
+        path: /var/lib/pacman/sync
+        state: absent
+
+    - name: Re-create pacman sync directory
+      ansible.builtin.file:
+        path: /var/lib/pacman/sync
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Force refresh pacman databases and update keyrings directly
+      ansible.builtin.command:
+        cmd: pacman -Sy --noconfirm archlinux-keyring cachyos-keyring
+      changed_when: true
+
+    - name: Wipe pacman package cache directory
+      ansible.builtin.file:
+        path: /var/cache/pacman/pkg
+        state: absent
+
+    - name: Recreate clean pacman package cache directory
+      ansible.builtin.file:
+        path: /var/cache/pacman/pkg
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Upgrade all system packages (including multilib sync)
+      ansible.builtin.command:
+        cmd: pacman -Syu --noconfirm
+      register: pacman_upgrade_result
+      changed_when: "'there is nothing to do' not in pacman_upgrade_result.stdout"
+
+    - name: Install baseline hardware drivers and power management tooling
+      community.general.pacman:
+        name:
+          - intel-media-driver
+          - libva-intel-driver
+          - mesa
+          - powertop
+          - cpupower
+        state: present
+
+    - name: Install common_packages and node_packages from inventory
+      community.general.pacman:
+        name: "{{ (common_packages | default([])) + (node_packages | default([])) }}"
+        state: present
+
+    # -------------------------------------------------------------------------
+    # 2. Power & Thermal Management
+    # -------------------------------------------------------------------------
+    - name: Deploy PowerTOP auto-tune systemd service unit
+      ansible.builtin.copy:
+        src: "{{ project_root }}/files/powertop.service"
+        dest: /etc/systemd/system/powertop.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload systemd daemon
+
+    - name: Enable and start Powertop daemon
+      ansible.builtin.systemd:
+        name: powertop
+        enabled: true
+        state: started
+
+  # ---------------------------------------------------------------------------
+  # Handlers
+  # ---------------------------------------------------------------------------
+  handlers:
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
