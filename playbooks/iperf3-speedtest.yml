@@ -1,0 +1,125 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: "Dynamic N-Node iperf3 2.5 GbE Cluster Network Benchmark"
+  hosts: cluster_nodes
+  become: true
+  vars:
+    # Resolve project root dynamically matching base-setup.yml path resolution
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Zero-Assumption Interface & IP Discovery
+    # -------------------------------------------------------------------------
+    - name: "Identify primary management interface"
+      ansible.builtin.set_fact:
+        mgmt_iface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+
+    - name: "Discover physical USB-C ethernet interface"
+      ansible.builtin.set_fact:
+        discovered_usb_iface: >-
+          {{
+            ansible_facts['interfaces']
+            | reject('equalto', 'lo')
+            | reject('equalto', mgmt_iface)
+            | select('match', '^(eth|en|enp|wlx|usb).*')
+            | list
+            | first
+          }}
+
+    - name: "Extract clean 2.5 GbE IP address"
+      ansible.builtin.set_fact:
+        target_cluster_ip: "{{ (hostvars[inventory_hostname]['cluster_ip'] | default(hostvars[inventory_hostname]['vlan107_ip']) | default(ansible_facts[discovered_usb_iface]['ipv4']['address'])) | regex_replace('/.*$', '') }}"
+
+    - name: "Run full-mesh benchmark execution block"
+      block:
+        # ---------------------------------------------------------------------
+        # 2. Infrastructure Setup & Persistent Server Daemon
+        # ---------------------------------------------------------------------
+        - name: "Allow iperf3 port 5201 in UFW"
+          community.general.ufw:
+            rule: allow
+            port: "5201"
+            proto: tcp
+            comment: "Temporary iperf3 speedtest"
+
+        - name: "Reload UFW to apply firewall rules"
+          ansible.builtin.command: ufw reload
+          changed_when: true
+
+        - name: "Ensure clean iperf3 process state"
+          ansible.builtin.shell: "killall -9 iperf3 2>/dev/null || true"
+          changed_when: false
+          failed_when: false
+
+        - name: "Start background iperf3 server daemon on 2.5 GbE interface"
+          ansible.builtin.command: "iperf3 -s -D -B {{ target_cluster_ip }}"
+          changed_when: true
+
+        # ---------------------------------------------------------------------
+        # 3. Dynamic Sequential Speed Test Matrix
+        # ---------------------------------------------------------------------
+        - name: "Execute speed tests to all cluster peers"
+          ansible.builtin.command: >
+            iperf3 -c {{ hostvars[target_peer]['target_cluster_ip'] }}
+            -B {{ target_cluster_ip }}
+            -t 10 -P 4 --json
+          when: inventory_hostname != target_peer
+          loop: "{{ groups['cluster_nodes'] }}"
+          loop_control:
+            loop_var: target_peer
+            label: "{{ inventory_hostname }} -> {{ target_peer }}"
+          throttle: 1
+          register: iperf_runs
+          changed_when: false
+
+        # ---------------------------------------------------------------------
+        # 4. Results Aggregation & External Template Rendering
+        # ---------------------------------------------------------------------
+        - name: "Construct raw JSON string of test results"
+          ansible.builtin.set_fact:
+            node_results_raw: >-
+              [
+                {% for item in iperf_runs.results if not item.skipped | default(false) %}
+                {
+                  "source": "{{ inventory_hostname }}",
+                  "target": "{{ item.target_peer }}",
+                  "src_ip": "{{ target_cluster_ip }}",
+                  "dst_ip": "{{ hostvars[item.target_peer]['target_cluster_ip'] }}",
+                  "gbps": {{ ((item.stdout | from_json).end.sum_sent.bits_per_second / 1000000000) | round(2) }}
+                }{% if not loop.last %},{% endif %}
+                {% endfor %}
+              ]
+
+        - name: "Cast results string to native Ansible list"
+          ansible.builtin.set_fact:
+            node_results: "{{ node_results_raw | from_json }}"
+
+        - name: "Combine all node results on first node"
+          ansible.builtin.set_fact:
+            all_cluster_results: "{{ groups['cluster_nodes'] | map('extract', hostvars, 'node_results') | flatten }}"
+          run_once: true
+
+        - name: "Render and print summary table from template"
+          ansible.builtin.debug:
+            msg: "{{ lookup('template', project_root ~ '/templates/iperf_summary.j2').splitlines() }}"
+          run_once: true
+
+      # -----------------------------------------------------------------------
+      # 5. Mandatory Teardown (Always Runs)
+      # -----------------------------------------------------------------------
+      always:
+        - name: "Kill all iperf3 server daemons across cluster"
+          ansible.builtin.shell: "killall -9 iperf3 2>/dev/null || true"
+          changed_when: false
+          failed_when: false
+
+        - name: "Remove temporary iperf3 port 5201 rule from UFW"
+          community.general.ufw:
+            rule: delete allow port 5201 proto tcp
+          failed_when: false
+
+        - name: "Reload UFW firewall to restore original state"
+          ansible.builtin.command: ufw reload
+          failed_when: false
+          changed_when: false
