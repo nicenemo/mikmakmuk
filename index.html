@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mik Mak Muk,  Bare-Metal CachyOS Cluster</title>
+  <title>Mik Mak Muk, Bare-Metal CachyOS Cluster</title>
   <meta name="description" content="A 3-node mini PC homelab cluster running CachyOS on bare metal. Highlighting Linux kernel tuning, hardware hack workarounds, automated enterprise PKI, and systemd automation.">
   <style>
     :root {
@@ -357,13 +357,24 @@
           <div class="card">
             <h3>2.5 GbE USB-C Option Port Networking</h3>
             <ul style="font-size: 0.9rem;">
-              <li>HP never made official 2.5 GbE option modules for 4th gen chassis
-              <li>Thunderbolt is exclusive to EliteDesk (missing on ProDesk) and the required option port modules are
-                rare</li>
+              <li>HP never made official 2.5 GbE option modules for 4th gen chassis</li>
+              <li>Thunderbolt is exclusive to EliteDesk (missing on ProDesk) and the required option port modules are rare</li>
               <li>M.2 Wi-Fi/NVMe network adapters require custom 3D-printed rear covers to slot in the option port</li>
               <li>10 GbE USB adapters throttle under heat.</li>
-              <li> Adding USB-C 2.5 GbE dongles via Type-C option slots provides a clean, cheap 2.5x speed boost over
-                the 1 GbE onboard port without MacGyver hacks.</li>
+              <li>Adding USB-C 2.5 GbE dongles via Type-C option slots provides a clean, cheap 2.5x speed boost over the 1 GbE onboard port without MacGyver hacks.</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3>Automated Network Benchmarking &amp; Routing</h3>
+            <p style="font-size: 0.9rem;">
+              As the old Dutch proverb goes: <strong>"Meten is weten"</strong> (<em>"To measure is to know"</em>). We built an automated full-mesh <code>iperf3</code> benchmark playbook to verify line-rate throughput across both network tiers (1 GbE management and 2.5 GbE cluster interconnect).
+            </p>
+            <ul style="font-size: 0.9rem; padding-left: 1.1rem;">
+              <li><strong>Jumbo Frames (MTU 9000):</strong> Configured exclusively on the isolated 2.5 GbE backend to eliminate L2-L4 protocol overhead and maximize TCP payload transfer speed (~2.36 Gbps payload saturation).</li>
+              <li><strong>Zero Default Gateway on 2.5 GbE:</strong> The 2.5 GbE network runs strictly flat-L2 without a
+                default route. Internet and management traffic route solely through the 1 GbE interface (MTU 1500),
+                avoiding routing asymmetric bugs or PPPoE related MTU drops at the gateway.</li>
             </ul>
           </div>
         </div>
