@@ -11,6 +11,7 @@ all:
       - btop
       - wget
       - networkmanager
+      - iperf3
 
   children:
     cluster_nodes:
