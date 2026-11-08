@@ -7,6 +7,8 @@
   ansible.builtin.import_playbook: playbooks/base-setup.yml
 - name: Kernel Setup Playbook
   ansible.builtin.import_playbook: playbooks/kernel-setup.yml
+- name: Import SSD Trim Setup Playbook
+  ansible.builtin.import_playbook: playbooks/trim-setup.yml
 - name: Import Network Setup Playbook
   ansible.builtin.import_playbook: playbooks/network-setup.yml
 - name: Import Iperf 3 Speedtest Playbook
