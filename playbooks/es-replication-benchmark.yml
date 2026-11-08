@@ -1,0 +1,77 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: "Master Elasticsearch Replication & Payload Size Benchmark Matrix"
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    test_index_tiny: "bench_replication_tiny_docs"
+    test_index_medium: "bench_replication_medium_docs"
+    test_index_large: "bench_replication_large_docs"
+    test_index_max: "bench_replication_max_docs"
+    es_elastic_password: "{{ lookup('ansible.builtin.password', project_root ~ '/credentials/elastic_password.txt length=24 chars=ascii_letters,digits') }}"
+    mgmt_iface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+    matrix_results: {}
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Cluster-Wide Setup (All Nodes)
+    # -------------------------------------------------------------------------
+    - name: "Ensure stale benchmark script is purged from all nodes"
+      ansible.builtin.file:
+        path: /usr/local/bin/es_benchmark_client.py
+        state: absent
+
+    - name: "Ensure python-elasticsearch package is installed on all nodes"
+      community.general.pacman:
+        name: python-elasticsearch
+        state: present
+        update_cache: true
+
+    - name: "Deploy benchmark script to all nodes"
+      ansible.builtin.copy:
+        src: "{{ project_root }}/files/es_benchmark_client.py"
+        dest: /usr/local/bin/es_benchmark_client.py
+        mode: '0755'
+        force: true
+
+    # -------------------------------------------------------------------------
+    # 2. Benchmark Matrix Outer Loop: Target Node Iteration
+    # -------------------------------------------------------------------------
+    - name: "Execute Benchmark Suite Against Each Node"
+      include_tasks: run_node_tests.yml
+      loop: "{{ groups['cluster_nodes'] }}"
+      loop_control:
+        loop_var: target_node
+
+    # -------------------------------------------------------------------------
+    # 3. Display Final Matrix Report
+    # -------------------------------------------------------------------------
+    - name: "Display Benchmark Summary Report"
+      ansible.builtin.debug:
+        msg: "{{ lookup('template', project_root ~ '/templates/es_benchmark_report.j2').split('\n') }}"
+      when: inventory_hostname == groups['cluster_nodes'][0]
+
+    # -------------------------------------------------------------------------
+    # 4. Teardown & Script Cleanup (All Nodes)
+    # -------------------------------------------------------------------------
+    - name: "Purge benchmark indices explicitly"
+      ansible.builtin.uri:
+        url: "https://{{ hostvars[inventory_hostname]['elasticsearch_ip'] }}:9200/{{ item }}"
+        method: DELETE
+        user: elastic
+        password: "{{ es_elastic_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: [200, 404]
+      loop:
+        - "{{ test_index_tiny }}"
+        - "{{ test_index_medium }}"
+        - "{{ test_index_large }}"
+        - "{{ test_index_max }}"
+      run_once: true
+
+    - name: "Remove benchmark script from all nodes"
+      ansible.builtin.file:
+        path: /usr/local/bin/es_benchmark_client.py
+        state: absent

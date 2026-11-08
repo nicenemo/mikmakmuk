@@ -1,0 +1,4 @@
+{% for i in range(doc_count | int) %}
+{"index": {}}
+{"timestamp": "2026-11-08T10:00:00Z", "node": "{{ inventory_hostname }}", "payload": "{{ fill_char * (doc_size_bytes | int) }}"}
+{% endfor %}

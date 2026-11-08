@@ -1,0 +1,16 @@
+=========================================================================
+               CLUSTER STORAGE TRIM MAINTENANCE REPORT
+=========================================================================
+{% for host in groups['cluster_nodes'] %}
+NODE: {{ host.upper() }}
+{% set lines = hostvars[host].get('node_trim_results', []) %}
+{% if lines %}
+{% for line in lines %}
+  - {{ line }}
+{% endfor %}
+{% else %}
+  - No mount points trimmed.
+{% endif %}
+-------------------------------------------------------------------------
+{% endfor %}
+=========================================================================

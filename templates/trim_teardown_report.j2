@@ -1,0 +1,10 @@
+=========================================================================
+            CLUSTER STORAGE TRIM TEARDOWN & DISABLE REPORT
+=========================================================================
+{% for host in groups['cluster_nodes'] %}
+NODE: {{ host.upper() }}
+{% set m = hostvars[host].get('trim_teardown_status', {}) %}
+  fstrim.timer Service     : {{ m.timer_state | default('N/A') }}
+-------------------------------------------------------------------------
+{% endfor %}
+=========================================================================

@@ -1,0 +1,213 @@
+---
+# Included task file executing all 4 benchmark passes targeting `target_node`
+
+- name: "Set target node details for {{ target_node }}"
+  ansible.builtin.set_fact:
+    target_ip: "{{ hostvars[target_node]['elasticsearch_ip'] }}"
+    node_results: {}
+
+# -----------------------------------------------------------------------------
+# PASS 1: TINY DOCUMENTS (~200B)
+# -----------------------------------------------------------------------------
+- name: "Purge old tiny index for {{ target_node }}"
+  ansible.builtin.uri:
+    url: "https://{{ target_ip }}:9200/{{ test_index_tiny }}"
+    method: DELETE
+    user: elastic
+    password: "{{ es_elastic_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    status_code: [200, 404]
+  run_once: true
+
+- name: "Setup tiny index for {{ target_node }}"
+  ansible.builtin.uri:
+    url: "https://{{ target_ip }}:9200/{{ test_index_tiny }}"
+    method: PUT
+    user: elastic
+    password: "{{ es_elastic_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    body_format: json
+    body:
+      settings:
+        number_of_shards: 3
+        number_of_replicas: 1
+        refresh_interval: "1s"
+    status_code: [200]
+  run_once: true
+
+- name: "Execute Pass 1 against {{ target_node }}"
+  ansible.builtin.command:
+    cmd: >
+      /usr/local/bin/es_benchmark_client.py
+      --host "{{ target_ip }}"
+      --port 9200
+      --password "{{ es_elastic_password }}"
+      --index "{{ test_index_tiny }}"
+      --mode tiny
+  register: res_pass1
+  when: inventory_hostname == target_node
+  changed_when: true
+
+- name: "Record Pass 1 for {{ target_node }}"
+  ansible.builtin.set_fact:
+    node_results: "{{ node_results | combine({'pass1_tiny': (res_pass1.stdout | from_json)}) }}"
+  when: inventory_hostname == target_node
+
+# -----------------------------------------------------------------------------
+# PASS 2: MEDIUM DOCUMENTS (~2KB)
+# -----------------------------------------------------------------------------
+- name: "Purge old medium index for {{ target_node }}"
+  ansible.builtin.uri:
+    url: "https://{{ target_ip }}:9200/{{ test_index_medium }}"
+    method: DELETE
+    user: elastic
+    password: "{{ es_elastic_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    status_code: [200, 404]
+  run_once: true
+
+- name: "Setup medium index for {{ target_node }}"
+  ansible.builtin.uri:
+    url: "https://{{ target_ip }}:9200/{{ test_index_medium }}"
+    method: PUT
+    user: elastic
+    password: "{{ es_elastic_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    body_format: json
+    body:
+      settings:
+        number_of_shards: 3
+        number_of_replicas: 1
+        refresh_interval: "10s"
+    status_code: [200]
+  run_once: true
+
+- name: "Execute Pass 2 against {{ target_node }}"
+  ansible.builtin.command:
+    cmd: >
+      /usr/local/bin/es_benchmark_client.py
+      --host "{{ target_ip }}"
+      --port 9200
+      --password "{{ es_elastic_password }}"
+      --index "{{ test_index_medium }}"
+      --mode medium
+  register: res_pass2
+  when: inventory_hostname == target_node
+  changed_when: true
+
+- name: "Record Pass 2 for {{ target_node }}"
+  ansible.builtin.set_fact:
+    node_results: "{{ node_results | combine({'pass2_medium': (res_pass2.stdout | from_json)}) }}"
+  when: inventory_hostname == target_node
+
+# -----------------------------------------------------------------------------
+# PASS 3: LARGE DOCUMENTS (~10KB)
+# -----------------------------------------------------------------------------
+- name: "Purge old large index for {{ target_node }}"
+  ansible.builtin.uri:
+    url: "https://{{ target_ip }}:9200/{{ test_index_large }}"
+    method: DELETE
+    user: elastic
+    password: "{{ es_elastic_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    status_code: [200, 404]
+  run_once: true
+
+- name: "Setup large index for {{ target_node }}"
+  ansible.builtin.uri:
+    url: "https://{{ target_ip }}:9200/{{ test_index_large }}"
+    method: PUT
+    user: elastic
+    password: "{{ es_elastic_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    body_format: json
+    body:
+      settings:
+        number_of_shards: 3
+        number_of_replicas: 1
+        refresh_interval: "30s"
+    status_code: [200]
+  run_once: true
+
+- name: "Execute Pass 3 against {{ target_node }}"
+  ansible.builtin.command:
+    cmd: >
+      /usr/local/bin/es_benchmark_client.py
+      --host "{{ target_ip }}"
+      --port 9200
+      --password "{{ es_elastic_password }}"
+      --index "{{ test_index_large }}"
+      --mode large
+  register: res_pass3
+  when: inventory_hostname == target_node
+  changed_when: true
+
+- name: "Record Pass 3 for {{ target_node }}"
+  ansible.builtin.set_fact:
+    node_results: "{{ node_results | combine({'pass3_large': (res_pass3.stdout | from_json)}) }}"
+  when: inventory_hostname == target_node
+
+# -----------------------------------------------------------------------------
+# PASS 4: MAX SINGLE DOC (~45MB)
+# -----------------------------------------------------------------------------
+- name: "Purge old max index for {{ target_node }}"
+  ansible.builtin.uri:
+    url: "https://{{ target_ip }}:9200/{{ test_index_max }}"
+    method: DELETE
+    user: elastic
+    password: "{{ es_elastic_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    status_code: [200, 404]
+  run_once: true
+
+- name: "Setup max index for {{ target_node }}"
+  ansible.builtin.uri:
+    url: "https://{{ target_ip }}:9200/{{ test_index_max }}"
+    method: PUT
+    user: elastic
+    password: "{{ es_elastic_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    body_format: json
+    body:
+      settings:
+        number_of_shards: 3
+        number_of_replicas: 1
+        refresh_interval: "30s"
+    status_code: [200]
+  run_once: true
+
+- name: "Execute Pass 4 against {{ target_node }}"
+  ansible.builtin.command:
+    cmd: >
+      /usr/local/bin/es_benchmark_client.py
+      --host "{{ target_ip }}"
+      --port 9200
+      --password "{{ es_elastic_password }}"
+      --index "{{ test_index_max }}"
+      --mode max
+  register: res_pass4
+  when: inventory_hostname == target_node
+  changed_when: true
+
+- name: "Record Pass 4 for {{ target_node }}"
+  ansible.builtin.set_fact:
+    node_results: "{{ node_results | combine({'pass4_max': (res_pass4.stdout | from_json)}) }}"
+  when: inventory_hostname == target_node
+
+# -----------------------------------------------------------------------------
+# AGGREGATE RESULTS TO PRIMARY HOST (mik)
+# -----------------------------------------------------------------------------
+- name: "Share {{ target_node }} results to primary host"
+  ansible.builtin.set_fact:
+    matrix_results: "{{ hostvars[groups['cluster_nodes'][0]]['matrix_results'] | default({}) | combine({target_node: node_results}) }}"
+  delegate_to: "{{ groups['cluster_nodes'][0] }}"
+  delegate_facts: true
+  when: inventory_hostname == target_node

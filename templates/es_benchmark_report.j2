@@ -1,0 +1,18 @@
+=========================================================================
+   ELASTICSEARCH 3-NODE CLUSTER BENCHMARK MATRIX (2.5 GbE / MTU 9000)
+=========================================================================
+{% for target in groups['cluster_nodes'] %}
+{% set res = matrix_results.get(target, {}) %}
+-------------------------------------------------------------------------
+TARGET NODE: {{ target.upper() }} (IP: {{ hostvars[target]['elasticsearch_ip'] }})
+-------------------------------------------------------------------------
+{% if res %}
+  PASS 1 (TINY ~200B)   : {{ res.pass1_tiny.throughput_mbs | default('N/A') }} MB/s ({{ res.pass1_tiny.throughput_gbps | default('N/A') }} Gbps) | {{ res.pass1_tiny.duration_sec | default('N/A') }}s
+  PASS 2 (MEDIUM ~2KB)  : {{ res.pass2_medium.throughput_mbs | default('N/A') }} MB/s ({{ res.pass2_medium.throughput_gbps | default('N/A') }} Gbps) | {{ res.pass2_medium.duration_sec | default('N/A') }}s
+  PASS 3 (LARGE ~10KB)  : {{ res.pass3_large.throughput_mbs | default('N/A') }} MB/s ({{ res.pass3_large.throughput_gbps | default('N/A') }} Gbps) | {{ res.pass3_large.duration_sec | default('N/A') }}s
+  PASS 4 (MAX SINGLE)   : {{ res.pass4_max.throughput_mbs | default('N/A') }} MB/s ({{ res.pass4_max.throughput_gbps | default('N/A') }} Gbps) | {{ res.pass4_max.duration_sec | default('N/A') }}s
+{% else %}
+  [NO DATA RECORDED FOR THIS NODE]
+{% endif %}
+{% endfor %}
+=========================================================================

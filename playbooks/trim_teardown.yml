@@ -1,0 +1,35 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: "Cluster Storage TRIM Teardown & Maintenance Disable"
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Stop and Disable Automated Maintenance (systemd fstrim.timer)
+    # -------------------------------------------------------------------------
+    - name: "Stop and disable weekly fstrim.timer"
+      ansible.builtin.systemd:
+        name: fstrim.timer
+        state: stopped
+        enabled: false
+      ignore_errors: true
+      register: timer_disable_res
+
+    # -------------------------------------------------------------------------
+    # 2. Compile Teardown Telemetry
+    # -------------------------------------------------------------------------
+    - name: "Store local node teardown facts"
+      ansible.builtin.set_fact:
+        trim_teardown_status:
+          timer_state: "{{ 'Disabled & Stopped' if not timer_disable_res.failed else 'Failed / Not Installed' }}"
+
+    # -------------------------------------------------------------------------
+    # 3. Display Teardown Summary
+    # -------------------------------------------------------------------------
+    - name: "Display Storage TRIM Teardown Summary"
+      ansible.builtin.debug:
+        msg: "{{ lookup('template', project_root ~ '/templates/trim_teardown_report.j2').split('\n') }}"
+      run_once: true

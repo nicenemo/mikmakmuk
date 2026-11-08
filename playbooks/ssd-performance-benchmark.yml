@@ -1,0 +1,179 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: "Base Cluster SSD Performance, Latency & Thermal Matrix"
+  hosts: cluster_nodes
+  become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    bench_dir: "/var/tmp"
+    fio_seq_file: "{{ bench_dir }}/fio_test_seq.img"
+    fio_sync_file: "{{ bench_dir }}/fio_test_sync.img"
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Base Environment Setup & Pre-Cleanup
+    # -------------------------------------------------------------------------
+    - name: "Ensure required diagnostic packages are installed on all nodes"
+      community.general.pacman:
+        name:
+          - fio
+          - nvme-cli
+          - smartmontools
+          - util-linux
+          - jq
+        state: present
+        update_cache: true
+
+    - name: "Ensure stale test files are purged prior to execution"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ fio_seq_file }}"
+        - "{{ fio_sync_file }}"
+
+    # -------------------------------------------------------------------------
+    # 2. Drive Characteristic, Wear & Pre-Test Telemetry Prechecks
+    # -------------------------------------------------------------------------
+    - name: "Discover primary NVMe device path"
+      ansible.builtin.shell:
+        cmd: "ls /dev/nvme0n1 /dev/nvme0 2>/dev/null | head -n1 || echo '/dev/nvme0'"
+      register: nvme_dev_raw
+      changed_when: false
+
+    - name: "Query NVMe Drive Model"
+      ansible.builtin.shell:
+        cmd: "nvme id-ctrl {{ nvme_dev_raw.stdout }} -o json 2>/dev/null | jq -r '.mn // \"Unknown\"' | tr -d '\"' || echo 'Unknown NVMe'"
+      register: nvme_model_raw
+      changed_when: false
+
+    - name: "Query NVMe Percentage Used (Wear)"
+      ansible.builtin.shell:
+        cmd: "smartctl -A {{ nvme_dev_raw.stdout }} 2>/dev/null | awk '/Percentage Used:/ {print $3}' || echo 'N/A'"
+      register: nvme_wear_raw
+      changed_when: false
+
+    - name: "Query NVMe Total Bytes Written (TBW)"
+      ansible.builtin.shell:
+        cmd: "smartctl -A {{ nvme_dev_raw.stdout }} 2>/dev/null | awk '/Data Units Written:/ {print $4, $5}' | tr -d '[]' || echo 'N/A'"
+      register: nvme_tbw_raw
+      changed_when: false
+
+    - name: "Sample Pre-Test NVMe Temperature"
+      ansible.builtin.shell:
+        cmd: "smartctl -A {{ nvme_dev_raw.stdout }} 2>/dev/null | awk '/Temperature:/ {print $2} /Temperature Sensor 1:/ {print $4}' | head -n1 || echo 'N/A'"
+      register: temp_before_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 3. Direct Sequential Write Test (2 GB, Uncompressible Buffers)
+    # -------------------------------------------------------------------------
+    - name: "Run Direct Sequential Write Benchmark (128k block, direct=1)"
+      ansible.builtin.command:
+        cmd: >
+          fio --name=seq_write
+          --filename={{ fio_seq_file }}
+          --size=2G
+          --rw=write
+          --bs=128k
+          --direct=1
+          --refill_buffers
+          --buffer_compress_percentage=0
+          --ioengine=libaio
+          --iodepth=4
+          --runtime=20
+          --time_based
+          --output-format=json
+      register: fio_seq_raw
+      changed_when: true
+
+    # -------------------------------------------------------------------------
+    # 4. Synchronous Random Write Latency Test (fsync=1, Direct I/O)
+    # -------------------------------------------------------------------------
+    - name: "Run fsync Commitment Latency Benchmark (4k block, fsync=1)"
+      ansible.builtin.command:
+        cmd: >
+          fio --name=sync_write
+          --filename={{ fio_sync_file }}
+          --size=512M
+          --rw=randwrite
+          --bs=4k
+          --direct=1
+          --fsync=1
+          --refill_buffers
+          --buffer_compress_percentage=0
+          --ioengine=libaio
+          --iodepth=1
+          --runtime=15
+          --time_based
+          --output-format=json
+      register: fio_sync_raw
+      changed_when: true
+
+    # -------------------------------------------------------------------------
+    # 5. Teardown Benchmark Files & Immediate Active TRIM
+    # -------------------------------------------------------------------------
+    - name: "Purge benchmark test files from filesystem"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ fio_seq_file }}"
+        - "{{ fio_sync_file }}"
+
+    - name: "Execute active TRIM on test filesystem to clear benchmark artifacts"
+      ansible.builtin.command:
+        cmd: "fstrim -v {{ bench_dir }}"
+      changed_when: false
+
+    - name: "Evaluate post-cleanup TRIM status (dry-run check)"
+      ansible.builtin.shell:
+        cmd: "fstrim -v --dry-run {{ bench_dir }} 2>&1"
+      register: fstrim_eval_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 6. Post-Test Temperature & Metric Fact Storage
+    # -------------------------------------------------------------------------
+    - name: "Sample Post-Test NVMe Temperature"
+      ansible.builtin.shell:
+        cmd: "smartctl -A {{ nvme_dev_raw.stdout }} 2>/dev/null | awk '/Temperature:/ {print $2} /Temperature Sensor 1:/ {print $4}' | head -n1 || echo 'N/A'"
+      register: temp_after_raw
+      changed_when: false
+
+    - name: "Parse metrics JSON output"
+      ansible.builtin.set_fact:
+        node_seq_json: "{{ fio_seq_raw.stdout | from_json }}"
+        node_sync_json: "{{ fio_sync_raw.stdout | from_json }}"
+
+    - name: "Store local node SSD metrics fact"
+      ansible.builtin.set_fact:
+        node_ssd_metrics:
+          drive_model: "{{ nvme_model_raw.stdout | trim }}"
+          wear_pct: "{{ nvme_wear_raw.stdout | trim }}"
+          tbw_written: "{{ nvme_tbw_raw.stdout | trim }}"
+          trim_recommendation: "{{ 'Trim Recommended (' ~ fstrim_eval_raw.stdout | trim ~ ')' if ('trimmed' in fstrim_eval_raw.stdout and not '0 B' in fstrim_eval_raw.stdout) else 'Trimmed / Up to Date' }}"
+          temp_before: "{{ temp_before_raw.stdout | trim }}"
+          temp_after: "{{ temp_after_raw.stdout | trim }}"
+          seq_write_mbs: "{{ (node_seq_json.jobs[0].write.bw_bytes / (1024 * 1024)) | round(2) }}"
+          seq_iops: "{{ node_seq_json.jobs[0].write.iops | round(0) }}"
+          sync_write_mbs: "{{ (node_sync_json.jobs[0].write.bw_bytes / (1024 * 1024)) | round(2) }}"
+          sync_iops: "{{ node_sync_json.jobs[0].write.iops | round(0) }}"
+          fsync_lat_avg_us: "{{ (node_sync_json.jobs[0].write.lat_ns.mean / 1000) | round(2) }}"
+          fsync_lat_p99_us: "{{ (node_sync_json.jobs[0].write.clat_ns.percentile['99.000000'] / 1000) | round(2) }}"
+
+    # -------------------------------------------------------------------------
+    # 7. Display Comparative Summary Report
+    # -------------------------------------------------------------------------
+    - name: "Display SSD Benchmark Matrix Summary"
+      ansible.builtin.debug:
+        msg: "{{ lookup('template', project_root ~ '/templates/ssd_benchmark_report.j2').split('\n') }}"
+      run_once: true
+
+    # -------------------------------------------------------------------------
+    # 8. Post-Execution Package Cleanup (All Nodes)
+    # -------------------------------------------------------------------------
+    - name: "Remove fio package from all nodes"
+      community.general.pacman:
+        name: fio
+        state: absent
