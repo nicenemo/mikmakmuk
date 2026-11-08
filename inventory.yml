@@ -27,7 +27,7 @@ all:
       hosts:
         mik:
           ansible_host: 192.168.105.2
-          ram_gb: 64
+          ram_gb: 32
           cpu_type: 8500
           btrfs_mount_opts: "noatime,compress-force=zstd:1,space_cache=v2"
           node_packages:
@@ -43,7 +43,7 @@ all:
 
         mak:
           ansible_host: 192.168.105.3
-          ram_gb: 32
+          ram_gb: 64
           cpu_type: 8500T
           btrfs_mount_opts: "noatime,compress=zstd:1,commit=15,space_cache=v2"
           node_packages:
