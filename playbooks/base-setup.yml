@@ -57,43 +57,15 @@
       register: pacman_upgrade_result
       changed_when: "'there is nothing to do' not in pacman_upgrade_result.stdout"
 
-    - name: Install baseline hardware drivers and power management tooling
+    - name: Install baseline hardware drivers
       community.general.pacman:
         name:
           - intel-media-driver
           - libva-intel-driver
           - mesa
-          - powertop
-          - cpupower
         state: present
 
     - name: Install common_packages and node_packages from inventory
       community.general.pacman:
         name: "{{ (common_packages | default([])) + (node_packages | default([])) }}"
         state: present
-
-    # -------------------------------------------------------------------------
-    # 2. Power & Thermal Management
-    # -------------------------------------------------------------------------
-    - name: Deploy PowerTOP auto-tune systemd service unit
-      ansible.builtin.copy:
-        src: "{{ project_root }}/files/powertop.service"
-        dest: /etc/systemd/system/powertop.service
-        owner: root
-        group: root
-        mode: '0644'
-      notify: Reload systemd daemon
-
-    - name: Enable and start Powertop daemon
-      ansible.builtin.systemd:
-        name: powertop
-        enabled: true
-        state: started
-
-  # ---------------------------------------------------------------------------
-  # Handlers
-  # ---------------------------------------------------------------------------
-  handlers:
-    - name: Reload systemd daemon
-      ansible.builtin.systemd:
-        daemon_reload: true
