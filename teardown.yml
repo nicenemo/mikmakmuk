@@ -7,6 +7,9 @@
 - name: Import Network Teardown Playbook
   ansible.builtin.import_playbook: playbooks/network-teardown.yml
 
+- name: Import Trim Teardown Playbook
+  ansible.builtin.import_playbook: playbooks/trim-teardown.yml
+
 - name: Import Kernel Teardown Playbook
   ansible.builtin.import_playbook: playbooks/kernel-teardown.yml
 
