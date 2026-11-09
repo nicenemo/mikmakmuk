@@ -1,0 +1,134 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: "Cluster CPU & Memory Performance Benchmark with Thermal Audit"
+  hosts: cluster_nodes
+  become: true
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Ensure Dependencies Are Present
+    # -------------------------------------------------------------------------
+    - name: "Install CPU benchmarking dependencies"
+      community.general.pacman:
+        name:
+          - sysbench
+          - stress-ng
+          - lm_sensors
+        state: present
+        update_cache: true
+
+    # -------------------------------------------------------------------------
+    # 2. Baseline Pre-Test Thermal Readings
+    # -------------------------------------------------------------------------
+    - name: "Query Pre-Test CPU Core Temperature"
+      ansible.builtin.shell:
+        cmd: "sensors 2>/dev/null | grep -iE '(Package id 0|Core 0)' | head -n1 | awk '{print $4}' | tr -d '+°C' || echo 'N/A'"
+      register: cpu_temp_pre_raw
+      changed_when: false
+
+    - name: "Query Pre-Test NVMe Temperature"
+      ansible.builtin.shell:
+        cmd: "cat /sys/class/nvme/nvme0/hwmon*/temp1_input 2>/dev/null | awk '{print $1/1000}' || echo 'N/A'"
+      register: nvme_temp_pre_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 3. CPU Single-Threaded Benchmark (sysbench)
+    # -------------------------------------------------------------------------
+    - name: "Run Single-Core CPU Benchmark (sysbench)"
+      ansible.builtin.shell:
+        cmd: "sysbench cpu --threads=1 --cpu-max-prime=20000 --time=10 run | grep 'events per second:' | awk '{print $4}'"
+      register: cpu_single_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 4. CPU Multi-Threaded Benchmark (sysbench)
+    # -------------------------------------------------------------------------
+    - name: "Run Multi-Core CPU Benchmark (sysbench)"
+      ansible.builtin.shell:
+        cmd: "sysbench cpu --threads=$(nproc) --cpu-max-prime=20000 --time=10 run | grep 'events per second:' | awk '{print $4}'"
+      register: cpu_multi_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 5. Stress-NG Compute Matrix Operations
+    # -------------------------------------------------------------------------
+    - name: "Run Stress-NG Matrix Compute Stress Test"
+      ansible.builtin.shell:
+        cmd: "stress-ng --matrix $(nproc) --timeout 10s --metrics-brief 2>&1 | grep 'matrix' | awk '{print $9}'"
+      register: stress_matrix_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 6. Memory Throughput & Latency (sysbench)
+    # -------------------------------------------------------------------------
+    - name: "Run Sequential Memory Read Throughput (sysbench)"
+      ansible.builtin.shell:
+        cmd: "sysbench memory --threads=$(nproc) --memory-oper=read --memory-access-mode=seq run | grep 'transferred' | awk '{print $4, $5}' | tr -d '()'"
+      register: mem_read_raw
+      changed_when: false
+
+    - name: "Run Sequential Memory Write Throughput (sysbench)"
+      ansible.builtin.shell:
+        cmd: "sysbench memory --threads=$(nproc) --memory-oper=write --memory-access-mode=seq run | grep 'transferred' | awk '{print $4, $5}' | tr -d '()'"
+      register: mem_write_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 7. Post-Test Thermal Readings & Throttling/Power Limit Audit
+    # -------------------------------------------------------------------------
+    - name: "Query Post-Test CPU Core Temperature"
+      ansible.builtin.shell:
+        cmd: "sensors 2>/dev/null | grep -iE '(Package id 0|Core 0)' | head -n1 | awk '{print $4}' | tr -d '+°C' || echo 'N/A'"
+      register: cpu_temp_post_raw
+      changed_when: false
+
+    - name: "Query Post-Test NVMe Temperature"
+      ansible.builtin.shell:
+        cmd: "cat /sys/class/nvme/nvme0/hwmon*/temp1_input 2>/dev/null | awk '{print $1/1000}' || echo 'N/A'"
+      register: nvme_temp_post_raw
+      changed_when: false
+
+    - name: "Check System Logs for CPU Thermal Throttling / Power Limit Events"
+      ansible.builtin.shell:
+        cmd: "dmesg | grep -iE '(thermal|throttle|power limit|pkg_power_limit|pl1|pl2)' | tail -n2 || echo 'None Detected'"
+      register: thermal_throttle_logs_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 8. Gather Node Telemetry & Facts
+    # -------------------------------------------------------------------------
+    - name: "Compile CPU & Memory Telemetry Facts"
+      ansible.builtin.set_fact:
+        node_cpu_bench:
+          cpu_model: "{{ ansible_facts['processor'][1] | default(ansible_facts['processor'][0]) }}"
+          cores: "{{ ansible_facts['processor_vcpus'] }}"
+          sysbench_single: "{{ cpu_single_raw.stdout | trim }} ops/sec"
+          sysbench_multi: "{{ cpu_multi_raw.stdout | trim }} ops/sec"
+          stress_matrix_bops: "{{ stress_matrix_raw.stdout | trim }} bops"
+          mem_read_speed: "{{ mem_read_raw.stdout | trim }}"
+          mem_write_speed: "{{ mem_write_raw.stdout | trim }}"
+          cpu_temp_delta: "{{ cpu_temp_pre_raw.stdout | trim }} °C (Idle) --> {{ cpu_temp_post_raw.stdout | trim }} °C (Post-Test)"
+          nvme_temp_delta: "{{ nvme_temp_pre_raw.stdout | trim }} °C (Idle) --> {{ nvme_temp_post_raw.stdout | trim }} °C (Post-Test)"
+          thermal_power_events: "{{ thermal_throttle_logs_raw.stdout | trim }}"
+
+    # -------------------------------------------------------------------------
+    # 9. Print Consolidated Output Matrix
+    # -------------------------------------------------------------------------
+    - name: "Display CPU & Memory Benchmark Summary"
+      ansible.builtin.debug:
+        msg:
+          - "========================================================================="
+          - "            CLUSTER CPU & MEMORY PERFORMANCE & THERMAL MATRIX"
+          - "========================================================================="
+          - "Host                     : {{ inventory_hostname.upper() }}"
+          - "CPU Model                : {{ node_cpu_bench.cpu_model }} ({{ node_cpu_bench.cores }} Cores)"
+          - "Single-Thread Sysbench   : {{ node_cpu_bench.sysbench_single }}"
+          - "Multi-Thread Sysbench    : {{ node_cpu_bench.sysbench_multi }}"
+          - "Matrix Operations        : {{ node_cpu_bench.stress_matrix_bops }}"
+          - "Memory Read Bandwidth    : {{ node_cpu_bench.mem_read_speed }}"
+          - "Memory Write Bandwidth   : {{ node_cpu_bench.mem_write_speed }}"
+          - "CPU Thermal Delta        : {{ node_cpu_bench.cpu_temp_delta }}"
+          - "NVMe Thermal Delta       : {{ node_cpu_bench.nvme_temp_delta }}"
+          - "Thermal/Power Log Events : {{ node_cpu_bench.thermal_power_events }}"
+          - "-------------------------------------------------------------------------"

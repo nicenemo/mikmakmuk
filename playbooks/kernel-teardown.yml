@@ -1,25 +1,134 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: Revert Kernel Command Line and Module Configuration
+- name: Teardown Kernel Performance Optimizations & Revert Limine
   hosts: cluster_nodes
   become: true
+  vars:
+    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    tuning_cmdline: "{{ lookup('ansible.builtin.file', project_root ~ '/files/homelab-tuning.conf', errors='ignore') | default('', true) | trim }}"
+    tuning_tokens: "{{ tuning_cmdline.split() if tuning_cmdline | length > 0 else [] }}"
+    force_reboot: false
 
   tasks:
-    - name: Remove iGPU load module file
+    # -------------------------------------------------------------------------
+    # 1. Environment & Remote Tmp Fix
+    # -------------------------------------------------------------------------
+    - name: Ensure Ansible remote_tmp directory exists with correct permissions
+      ansible.builtin.file:
+        path: /root/.ansible/tmp
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    # -------------------------------------------------------------------------
+    # 2. Revert /etc/default/limine & Remove Configurations
+    # -------------------------------------------------------------------------
+    - name: Read current /etc/default/limine content
+      ansible.builtin.command: cat /etc/default/limine
+      register: limine_default_file
+      changed_when: false
+
+    - name: Strip tuning parameters from KERNEL_CMDLINE[default] in /etc/default/limine
+      ansible.builtin.replace:
+        path: /etc/default/limine
+        regexp: "{{ '\\s*\\b' ~ (item | regex_escape) ~ '\\b' }}"
+        replace: ''
+      loop: "{{ tuning_tokens }}"
+      when: tuning_tokens | length > 0
+      register: teardown_limine_result
+
+    - name: Remove sysctl performance configuration
+      ansible.builtin.file:
+        path: /etc/sysctl.d/99-homelab-performance.conf
+        state: absent
+
+    - name: Remove iGPU module load configuration
       ansible.builtin.file:
         path: /etc/modules-load.d/igpu.conf
         state: absent
 
-    - name: Remove homelab cmdline kernel tuning configuration
+    - name: Remove leftover cmdline.d drop-ins if present
       ansible.builtin.file:
         path: /etc/cmdline.d/homelab-tuning.conf
         state: absent
-      notify: Regenerate initramfs teardown
 
-    - name: Flush handlers
-      ansible.builtin.meta: flush_handlers
+    # -------------------------------------------------------------------------
+    # 3. Evaluate State & Force Rebuild Fact
+    # -------------------------------------------------------------------------
+    - name: Read live running /proc/cmdline for state check
+      ansible.builtin.command: cat /proc/cmdline
+      register: proc_cmdline_check
+      changed_when: false
 
-  handlers:
-    - name: Regenerate initramfs teardown
-      ansible.builtin.command: mkinitcpio -P
+    - name: Read current /boot/limine.conf content for default_entry check
+      ansible.builtin.command: cat /boot/limine.conf
+      register: limine_conf_check
+      changed_when: false
+
+    - name: Evaluate force_rebuild fact
+      ansible.builtin.set_fact:
+        force_rebuild: >-
+          {{ (teardown_limine_result.changed | default(false)) or
+             (tuning_tokens | length > 0 and (tuning_tokens[0] in proc_cmdline_check.stdout)) or
+             ('default_entry: CachyOS/linux-cachyos' not in limine_conf_check.stdout) or
+             (force_reboot | bool) }}
+
+    # -------------------------------------------------------------------------
+    # 4. Rebuild Bootloader Architecture (Order Matters)
+    # -------------------------------------------------------------------------
+    - name: Rebuild initramfs images for all installed kernels
+      ansible.builtin.command:
+        cmd: mkinitcpio -P
       changed_when: true
+      when: force_rebuild
+
+    - name: Regenerate Limine entries via limine-entry-tool
+      ansible.builtin.command:
+        cmd: limine-entry-tool
+      changed_when: true
+      when: force_rebuild
+
+    - name: Disable remember_last_entry in /boot/limine.conf AFTER regeneration
+      ansible.builtin.replace:
+        path: /boot/limine.conf
+        regexp: '^\s*remember_last_entry\s*:\s*.*$'
+        replace: 'remember_last_entry: no'
+      when: force_rebuild
+
+    - name: Ensure default_entry is explicitly set in /boot/limine.conf AFTER regeneration
+      ansible.builtin.lineinfile:
+        path: /boot/limine.conf
+        regexp: '^\s*default_entry\s*:.*$'
+        line: 'default_entry: CachyOS/linux-cachyos'
+        insertafter: '^timeout:'
+        state: present
+      when: force_rebuild
+
+    # -------------------------------------------------------------------------
+    # 5. Safe Reboot & Post-Teardown Assertion
+    # -------------------------------------------------------------------------
+    - name: Reboot node into clean default kernel state
+      ansible.builtin.reboot:
+        msg: "Rebooting to restore default kernel parameters"
+        connect_timeout: 5
+        reboot_timeout: 120
+        pre_reboot_delay: 2
+        post_reboot_delay: 5
+        test_command: uptime
+      when: force_rebuild
+
+    - name: Read live running kernel command line (/proc/cmdline) post-teardown
+      ansible.builtin.command:
+        cmd: cat /proc/cmdline
+      register: live_cmdline_post
+      changed_when: false
+
+    - name: Assert performance parameters are absent from /proc/cmdline
+      ansible.builtin.assert:
+        that:
+          - item not in live_cmdline_post.stdout
+        fail_msg: "Teardown failed! Parameter still active in /proc/cmdline: {{ item }}"
+        success_msg: "Verified {{ item }} is absent from /proc/cmdline"
+      loop: "{{ tuning_tokens }}"
+      when: tuning_tokens | length > 0

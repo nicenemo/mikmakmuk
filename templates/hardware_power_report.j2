@@ -1,0 +1,26 @@
+=========================================================================
+      CLUSTER HARDWARE, POWER MANAGEMENT & VIRTUALIZATION MATRIX
+=========================================================================
+{% for host in groups['cluster_nodes'] %}
+{% set m = hostvars[host].get('node_hw_metrics', {}) %}
+NODE: {{ host.upper() }}
+  CPU Model & Microcode    : {{ m.cpu_model | default('N/A') }} (ucode: {{ m.microcode | default('N/A') }})
+  Hardware Virtualization  : VMX: {{ m.vmx_support | default('N/A') }} | VT-d/IOMMU: {{ m.iommu_status | default('N/A') }}
+  CPU Power Governor       : Driver: {{ m.scaling_driver | default('N/A') }} | Governor: {{ m.scaling_governor | default('N/A') }}
+  EPP Profile / C-States   : EPP: {{ m.epp_profile | default('N/A') }} | Max C-State: {{ m.max_cstate | default('N/A') }}
+  CPU Freq Min / Max / Cur : {{ m.cpu_freq_min | default('N/A') }} MHz / {{ m.cpu_freq_max | default('N/A') }} MHz (Current: {{ m.cpu_freq_cur | default('N/A') }} MHz)
+  Turbo Boost / Core P-State: Turbo: {{ m.turbo_status | default('N/A') }}
+
+  -- MEMORY CONFIGURATION & TIMINGS --
+  Capacity & Topology      : Installed: {{ m.mem_total_gb | default('N/A') }} GB | Channel Mode: {{ m.mem_channel_mode | default('N/A') }} ({{ m.mem_dimms_populated | default('N/A') }} SO-DIMM(s))
+  Configured vs Max Speed  : Running: {{ m.mem_conf_speed | default('N/A') }} | Rated Max: {{ m.mem_max_speed | default('N/A') }}
+  CAS Latency & Timings    : Configured CAS: {{ m.mem_cas_latency | default('N/A') }} | Voltage: {{ m.mem_voltage | default('N/A') }}
+  DIMM Part Numbers        : {{ m.mem_part_numbers | default('N/A') }}
+
+  -- IGPU & VIRTUALIZATION READY --
+  iGPU Model & Frequency   : {{ m.igpu_model | default('N/A') }} (Cur: {{ m.igpu_cur_freq | default('N/A') }} MHz | Max: {{ m.igpu_max_freq | default('N/A') }} MHz)
+  iGPU Driver & Memory     : Driver: {{ m.igpu_driver | default('N/A') }} | GTT/VRAM: {{ m.igpu_vram | default('N/A') }}
+  Virtualization Readiness : KVM Modules: {{ m.kvm_modules | default('N/A') }} | Hugepages: {{ m.hugepages | default('N/A') }}
+-------------------------------------------------------------------------
+{% endfor %}
+=========================================================================

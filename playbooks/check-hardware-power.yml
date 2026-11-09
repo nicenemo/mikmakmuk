@@ -1,0 +1,188 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: "Cluster Hardware, Power Management, Memory & Virtualization Audit"
+  hosts: cluster_nodes
+  become: true
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Diagnostic Tools Check
+    # -------------------------------------------------------------------------
+    - name: "Ensure required diagnostic tools are installed"
+      community.general.pacman:
+        name:
+          - util-linux
+          - dmidecode
+          - pciutils
+          - sysfsutils
+        state: present
+        update_cache: true
+
+    # -------------------------------------------------------------------------
+    # 2. Query CPU & Virtualization Hardware Telemetry
+    # -------------------------------------------------------------------------
+    - name: "Query CPU Model and Microcode"
+      ansible.builtin.shell:
+        cmd: "grep -m1 'model name' /proc/cpuinfo | awk -F': ' '{print $2}'"
+      register: cpu_model_raw
+      changed_when: false
+
+    - name: "Query CPU Microcode Version"
+      ansible.builtin.shell:
+        cmd: "grep -m1 'microcode' /proc/cpuinfo | awk -F': ' '{print $2}'"
+      register: microcode_raw
+      changed_when: false
+
+    - name: "Check VMX (Intel VT-x) CPU Flag"
+      ansible.builtin.shell:
+        cmd: "grep -E -c '(vmx|svm)' /proc/cpuinfo || echo '0'"
+      register: vmx_flags_raw
+      changed_when: false
+
+    - name: "Check VT-d / IOMMU Status"
+      ansible.builtin.shell:
+        cmd: "dmesg | grep -iE '(DMAR|IOMMU)' | grep -iE '(enabled|found|initializ)' | head -n1 || echo 'Disabled in BIOS/Kernel'"
+      register: iommu_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 3. Query CPU Power & Frequency Governors
+    # -------------------------------------------------------------------------
+    - name: "Query CPU Scaling Driver"
+      ansible.builtin.shell:
+        cmd: "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_driver 2>/dev/null || echo 'N/A'"
+      register: scaling_driver_raw
+      changed_when: false
+
+    - name: "Query CPU Governor"
+      ansible.builtin.shell:
+        cmd: "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo 'N/A'"
+      register: scaling_gov_raw
+      changed_when: false
+
+    - name: "Query Energy Performance Preference (EPP)"
+      ansible.builtin.shell:
+        cmd: "cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference 2>/dev/null || echo 'N/A'"
+      register: epp_raw
+      changed_when: false
+
+    - name: "Check Turbo Boost Status"
+      ansible.builtin.shell:
+        cmd: "cat /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null | awk '{if ($1==\"0\") print \"Enabled\"; else print \"Disabled\"}' || echo 'N/A'"
+      register: turbo_raw
+      changed_when: false
+
+    - name: "Query CPU Frequencies (Min / Max / Current)"
+      ansible.builtin.shell:
+        cmd: |
+          MIN=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq 2>/dev/null | awk '{print $1/1000}' || echo "N/A")
+          MAX=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null | awk '{print $1/1000}' || echo "N/A")
+          CUR=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null | awk '{print $1/1000}' || echo "N/A")
+          echo "${MIN}|${MAX}|${CUR}"
+      register: cpu_freq_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 4. Detailed Memory Timings & SMBIOS Hardware Query
+    # -------------------------------------------------------------------------
+    - name: "Query Detailed Memory Architecture & Timings via dmidecode"
+      ansible.builtin.shell:
+        cmd: |
+          CONF_SPEED=$(dmidecode -t memory 2>/dev/null | grep -i 'Configured Memory Speed' | grep -v 'Unknown' | head -n1 | awk -F': ' '{print $2}' || echo 'N/A')
+          MAX_SPEED=$(dmidecode -t memory 2>/dev/null | grep -i 'Speed:' | grep -v 'Unknown' | head -n1 | awk -F': ' '{print $2}' || echo 'N/A')
+          DIMM_COUNT=$(dmidecode -t memory 2>/dev/null | grep -c 'Size: [0-9]' || echo '0')
+          PARTS=$(dmidecode -t memory 2>/dev/null | grep -i 'Part Number' | grep -v 'Unknown' | awk -F': ' '{print $2}' | tr '\n' ',' | sed 's/,$//' || echo 'N/A')
+          VOLT=$(dmidecode -t memory 2>/dev/null | grep -i 'Configured Voltage' | grep -v 'Unknown' | head -n1 | awk -F': ' '{print $2}' || echo 'N/A')
+
+          if echo "$CONF_SPEED" | grep -qE "266[0-9]|2667"; then
+            CAS="CL19 (Standard JEDEC)"
+          elif echo "$CONF_SPEED" | grep -q "2400"; then
+            CAS="CL17 (Standard JEDEC)"
+          elif echo "$CONF_SPEED" | grep -q "2133"; then
+            CAS="CL15 (Standard JEDEC)"
+          else
+            CAS="N/A / Dynamic"
+          fi
+
+          if [ "$DIMM_COUNT" -eq 2 ]; then
+            MODE="Dual-Channel (Interleaved)"
+          elif [ "$DIMM_COUNT" -eq 1 ]; then
+            MODE="Single-Channel (Bandwidth Constrained)"
+          else
+            MODE="Unknown / Unpopulated"
+          fi
+
+          echo "${CONF_SPEED}|${MAX_SPEED}|${DIMM_COUNT}|${MODE}|${CAS}|${VOLT}|${PARTS}"
+      register: mem_telemetry_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 5. Query iGPU Telemetry (Intel UHD 630)
+    # -------------------------------------------------------------------------
+    - name: "Query iGPU Driver & Device Name"
+      ansible.builtin.shell:
+        cmd: "lspci -nnk -d ::0300 | grep -i 'Kernel driver' | awk -F': ' '{print $2}' | head -n1 || echo 'i915'"
+      register: igpu_driver_raw
+      changed_when: false
+
+    - name: "Query iGPU Operating Frequencies"
+      ansible.builtin.shell:
+        cmd: |
+          CUR=$(cat /sys/class/drm/card0/gt_act_freq_mhz 2>/dev/null || cat /sys/class/drm/card0/gt/gt0/rps_act_freq_mhz 2>/dev/null || echo "N/A")
+          MAX=$(cat /sys/class/drm/card0/gt_max_freq_mhz 2>/dev/null || cat /sys/class/drm/card0/gt/gt0/rps_max_freq_mhz 2>/dev/null || echo "N/A")
+          echo "${CUR}|${MAX}"
+      register: igpu_freq_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 6. Query Virtualization Kernel Modules & Hugepages
+    # -------------------------------------------------------------------------
+    - name: "Check KVM Kernel Modules Loaded"
+      ansible.builtin.shell:
+        cmd: "lsmod | grep -E 'kvm_(intel|amd)' | awk '{print $1}' | tr '\n' ' ' || echo 'Not Loaded'"
+      register: kvm_modules_raw
+      changed_when: false
+
+    - name: "Check Configured Hugepages"
+      ansible.builtin.shell:
+        cmd: "cat /proc/sys/vm/nr_hugepages 2>/dev/null || echo '0'"
+      register: hugepages_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 7. Compile Facts and Display Summary Matrix
+    # -------------------------------------------------------------------------
+    - name: "Compile Hardware Telemetry Facts"
+      ansible.builtin.set_fact:
+        node_hw_metrics:
+          cpu_model: "{{ cpu_model_raw.stdout | trim }}"
+          microcode: "{{ microcode_raw.stdout | trim }}"
+          vmx_support: "{{ 'Enabled' if (vmx_flags_raw.stdout | int > 0) else 'Disabled in BIOS' }}"
+          iommu_status: "{{ 'Active / Enabled' if ('enabled' in iommu_raw.stdout | lower or 'initializ' in iommu_raw.stdout | lower) else 'Disabled' }}"
+          scaling_driver: "{{ scaling_driver_raw.stdout | trim }}"
+          scaling_governor: "{{ scaling_gov_raw.stdout | trim }}"
+          epp_profile: "{{ epp_raw.stdout | trim }}"
+          turbo_status: "{{ turbo_raw.stdout | trim }}"
+          cpu_freq_min: "{{ cpu_freq_raw.stdout.split('|')[0] }}"
+          cpu_freq_max: "{{ cpu_freq_raw.stdout.split('|')[1] }}"
+          cpu_freq_cur: "{{ cpu_freq_raw.stdout.split('|')[2] }}"
+          mem_total_gb: "{{ (ansible_facts['memtotal_mb'] / 1024) | round(1) }}"
+          mem_conf_speed: "{{ mem_telemetry_raw.stdout.split('|')[0] }}"
+          mem_max_speed: "{{ mem_telemetry_raw.stdout.split('|')[1] }}"
+          mem_dimms_populated: "{{ mem_telemetry_raw.stdout.split('|')[2] }}"
+          mem_channel_mode: "{{ mem_telemetry_raw.stdout.split('|')[3] }}"
+          mem_cas_latency: "{{ mem_telemetry_raw.stdout.split('|')[4] }}"
+          mem_voltage: "{{ mem_telemetry_raw.stdout.split('|')[5] }}"
+          mem_part_numbers: "{{ mem_telemetry_raw.stdout.split('|')[6] }}"
+          igpu_model: "Intel UHD Graphics 630"
+          igpu_driver: "{{ igpu_driver_raw.stdout | trim }}"
+          igpu_cur_freq: "{{ igpu_freq_raw.stdout.split('|')[0] }}"
+          igpu_max_freq: "{{ igpu_freq_raw.stdout.split('|')[1] }}"
+          igpu_vram: "Dynamic Shared Memory"
+          kvm_modules: "{{ kvm_modules_raw.stdout | trim }}"
+          hugepages: "{{ hugepages_raw.stdout | trim }} pages"
+
+    - name: "Display Hardware & Power Diagnostic Matrix"
+      ansible.builtin.debug:
+        msg: "{{ lookup('ansible.builtin.template', playbook_dir ~ '/../templates/hardware_power_report.j2').splitlines() }}"
+      run_once: true
