@@ -12,6 +12,20 @@ all:
       - wget
       - networkmanager
       - iperf3
+      - mesa
+      - vulkan-intel
+      - vulkan-icd-loader
+      - intel-media-driver
+      - libva-intel-driver
+      - vulkan-tools
+      - clinfo
+      - intel-gpu-tools
+      - lm_sensors
+      - stress-ng
+      - sysbench
+      - weston
+      - glmark2
+      - vkmark
 
   children:
     cluster_nodes:

@@ -7,7 +7,6 @@
     project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
     tuning_cmdline: "{{ lookup('ansible.builtin.file', project_root ~ '/files/homelab-tuning.conf', errors='ignore') | default('', true) | trim }}"
     tuning_tokens: "{{ tuning_cmdline.split() if tuning_cmdline | length > 0 else [] }}"
-    force_reboot: false
 
   tasks:
     # -------------------------------------------------------------------------
@@ -22,21 +21,52 @@
         mode: '0700'
 
     # -------------------------------------------------------------------------
-    # 2. Revert /etc/default/limine & Remove Configurations
+    # 2. Revert CPU Performance Service, Environment Drop-Ins & Power
     # -------------------------------------------------------------------------
-    - name: Read current /etc/default/limine content
-      ansible.builtin.command: cat /etc/default/limine
-      register: limine_default_file
+    - name: Disable and stop CPU performance service
+      ansible.builtin.systemd:
+        name: cpu-performance
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Remove CPU performance systemd service unit file
+      ansible.builtin.file:
+        path: /etc/systemd/system/cpu-performance.service
+        state: absent
+
+    - name: Disable and stop cpupower service
+      ansible.builtin.systemd:
+        name: cpupower
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Remove cpupower default configuration
+      ansible.builtin.file:
+        path: /etc/default/cpupower
+        state: absent
+
+    - name: Remove iGPU DRI environment drop-in file
+      ansible.builtin.file:
+        path: /etc/environment.d/99-homelab-igpu-dri.conf
+        state: absent
+
+    - name: Revert CPU scaling governor to powersave across all cores
+      ansible.builtin.shell:
+        cmd: |
+          for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+            [ -f "$gov" ] && echo powersave > "$gov"
+          done
       changed_when: false
 
-    - name: Strip tuning parameters from KERNEL_CMDLINE[default] in /etc/default/limine
-      ansible.builtin.replace:
-        path: /etc/default/limine
-        regexp: "{{ '\\s*\\b' ~ (item | regex_escape) ~ '\\b' }}"
-        replace: ''
-      loop: "{{ tuning_tokens }}"
-      when: tuning_tokens | length > 0
-      register: teardown_limine_result
+    - name: Revert CPU EPP profile to balance_performance across all cores
+      ansible.builtin.shell:
+        cmd: |
+          for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
+            [ -f "$epp" ] && echo balance_performance > "$epp"
+          done
+      changed_when: false
 
     - name: Remove sysctl performance configuration
       ansible.builtin.file:
@@ -54,25 +84,43 @@
         state: absent
 
     # -------------------------------------------------------------------------
-    # 3. Evaluate State & Force Rebuild Fact
+    # 3. Revert /etc/default/limine & Inspect Live State
     # -------------------------------------------------------------------------
-    - name: Read live running /proc/cmdline for state check
+    - name: Read current /etc/default/limine content
+      ansible.builtin.command: cat /etc/default/limine
+      register: limine_default_file
+      changed_when: false
+
+    - name: Strip tuning parameters from KERNEL_CMDLINE[default] in /etc/default/limine
+      ansible.builtin.replace:
+        path: /etc/default/limine
+        regexp: "{{ '\\s*\\b' ~ (item | regex_escape) ~ '\\b' }}"
+        replace: ''
+      loop: "{{ tuning_tokens }}"
+      when: tuning_tokens | length > 0
+      register: teardown_limine_result
+
+    - name: Read live running /proc/cmdline
       ansible.builtin.command: cat /proc/cmdline
       register: proc_cmdline_check
       changed_when: false
 
-    - name: Read current /boot/limine.conf content for default_entry check
+    - name: Read current /boot/limine.conf content
       ansible.builtin.command: cat /boot/limine.conf
       register: limine_conf_check
       changed_when: false
 
-    - name: Evaluate force_rebuild fact
+    # Check if any tuning token is still active in the running kernel command line
+    - name: Check for active tuning tokens in running kernel command line
       ansible.builtin.set_fact:
-        force_rebuild: >-
+        active_tuning_tokens: "{{ tuning_tokens | select('in', proc_cmdline_check.stdout) | list }}"
+
+    - name: Determine if reboot is strictly required for teardown
+      ansible.builtin.set_fact:
+        requires_reboot: >-
           {{ (teardown_limine_result.changed | default(false)) or
-             (tuning_tokens | length > 0 and (tuning_tokens[0] in proc_cmdline_check.stdout)) or
-             ('default_entry: CachyOS/linux-cachyos' not in limine_conf_check.stdout) or
-             (force_reboot | bool) }}
+             (active_tuning_tokens | length > 0) or
+             ('default_entry: CachyOS/linux-cachyos' not in limine_conf_check.stdout) }}
 
     # -------------------------------------------------------------------------
     # 4. Rebuild Bootloader Architecture (Order Matters)
@@ -81,20 +129,20 @@
       ansible.builtin.command:
         cmd: mkinitcpio -P
       changed_when: true
-      when: force_rebuild
+      when: requires_reboot | bool
 
     - name: Regenerate Limine entries via limine-entry-tool
       ansible.builtin.command:
         cmd: limine-entry-tool
       changed_when: true
-      when: force_rebuild
+      when: requires_reboot | bool
 
     - name: Disable remember_last_entry in /boot/limine.conf AFTER regeneration
       ansible.builtin.replace:
         path: /boot/limine.conf
         regexp: '^\s*remember_last_entry\s*:\s*.*$'
         replace: 'remember_last_entry: no'
-      when: force_rebuild
+      when: requires_reboot | bool
 
     - name: Ensure default_entry is explicitly set in /boot/limine.conf AFTER regeneration
       ansible.builtin.lineinfile:
@@ -103,20 +151,20 @@
         line: 'default_entry: CachyOS/linux-cachyos'
         insertafter: '^timeout:'
         state: present
-      when: force_rebuild
+      when: requires_reboot | bool
 
     # -------------------------------------------------------------------------
-    # 5. Safe Reboot & Post-Teardown Assertion
+    # 5. Automatic Reboot & Post-Teardown Assertion
     # -------------------------------------------------------------------------
     - name: Reboot node into clean default kernel state
       ansible.builtin.reboot:
-        msg: "Rebooting to restore default kernel parameters"
-        connect_timeout: 5
-        reboot_timeout: 120
+        msg: "Rebooting automatically to apply default Limine kernel parameters"
+        connect_timeout: 10
+        reboot_timeout: 300
         pre_reboot_delay: 2
         post_reboot_delay: 5
         test_command: uptime
-      when: force_rebuild
+      when: requires_reboot | bool
 
     - name: Read live running kernel command line (/proc/cmdline) post-teardown
       ansible.builtin.command:

@@ -3,12 +3,34 @@
 - name: Revert Base System Optimizations and Configuration
   hosts: cluster_nodes
   become: true
+  vars:
+    protected_packages:
+      # Network & Connectivity Preservation
+      - networkmanager
+
+      # Intel iGPU & Vulkan/VA-API Stack Preservation
+      - mesa
+      - vulkan-intel
+      - vulkan-icd-loader
+      - intel-media-driver
+      - libva-intel-driver
+      - lm_sensors
+
+      # Core System & Ansible Runtime Preservation
+      - python
+      - pacman
+      - archlinux-keyring
 
   tasks:
     # -------------------------------------------------------------------------
-    # 1. Clean User Packages
+    # 1. Clean Environment Drop-ins & User Packages Safely
     # -------------------------------------------------------------------------
-    - name: Remove common_packages and node_packages (excluding NetworkManager)
+    - name: Remove baseline iGPU DRI environment drop-in file
+      ansible.builtin.file:
+        path: /etc/environment.d/99-homelab-igpu-dri.conf
+        state: absent
+
+    - name: Remove common_packages and node_packages (excluding protected system packages)
       community.general.pacman:
-        name: "{{ ((common_packages | default([])) + (node_packages | default([]))) | reject('equalto', 'networkmanager') | list }}"
+        name: "{{ ((common_packages | default([])) + (node_packages | default([]))) | difference(protected_packages) }}"
         state: absent

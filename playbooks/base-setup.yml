@@ -57,15 +57,29 @@
       register: pacman_upgrade_result
       changed_when: "'there is nothing to do' not in pacman_upgrade_result.stdout"
 
-    - name: Install baseline hardware drivers
-      community.general.pacman:
-        name:
-          - intel-media-driver
-          - libva-intel-driver
-          - mesa
-        state: present
-
+    # -------------------------------------------------------------------------
+    # 2. Package Installation & System Environment Drop-Ins
+    # -------------------------------------------------------------------------
     - name: Install common_packages and node_packages from inventory
       community.general.pacman:
         name: "{{ (common_packages | default([])) + (node_packages | default([])) }}"
         state: present
+
+    - name: Ensure /etc/environment.d directory exists
+      ansible.builtin.file:
+        path: /etc/environment.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Deploy baseline iGPU DRI & OpenCL environment drop-in
+      ansible.builtin.copy:
+        content: |
+          MESA_LOADER_DRIVER_OVERRIDE=iris
+          LIBGL_ALWAYS_SOFTWARE=0
+          RUSTICL_ENABLE=iris
+        dest: /etc/environment.d/99-homelab-igpu-dri.conf
+        owner: root
+        group: root
+        mode: '0644'
