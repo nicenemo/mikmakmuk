@@ -1,59 +1,141 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: Apply Kernel Command Line and Max Performance Optimization
+- name: Apply Kernel Command Line and Performance Optimizations (Limine)
   hosts: cluster_nodes
   become: true
   vars:
     project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    tuning_cmdline: "{{ lookup('ansible.builtin.file', project_root ~ '/files/homelab-tuning.conf') | trim }}"
+    tuning_tokens: "{{ (lookup('ansible.builtin.file', project_root ~ '/files/homelab-tuning.conf') | trim).split() }}"
+    force_reboot: false
 
   tasks:
     # -------------------------------------------------------------------------
-    # 1. Disable PowerTOP (Prevents PowerTOP from overriding performance tunings)
+    # 1. Environment & Remote Tmp Fix
     # -------------------------------------------------------------------------
-    - name: Disable and stop PowerTOP auto-tune service if present
+    - name: Ensure Ansible remote_tmp directory exists with correct permissions
+      ansible.builtin.file:
+        path: /root/.ansible/tmp
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    # -------------------------------------------------------------------------
+    # 2. Kernel Discovery & Facts
+    # -------------------------------------------------------------------------
+    - name: Find target module directory for linux-cachyos
+      ansible.builtin.find:
+        paths: /usr/lib/modules
+        file_type: directory
+        patterns: "*cachyos*"
+        excludes: "*lts*"
+      register: kernel_module_dirs
+
+    - name: Extract target kernel release string
+      ansible.builtin.set_fact:
+        intended_kernel: "{{ kernel_module_dirs.files | map(attribute='path') | map('basename') | sort | last }}"
+      when: kernel_module_dirs.files | length > 0
+
+    # -------------------------------------------------------------------------
+    # 3. Clean Legacy Drop-Ins
+    # -------------------------------------------------------------------------
+    - name: Disable and stop PowerTOP service if present
       ansible.builtin.systemd:
         name: powertop
         enabled: false
         state: stopped
       failed_when: false
 
-    - name: Remove legacy PowerTOP systemd service unit
+    - name: Remove leftover cmdline.d drop-ins
       ansible.builtin.file:
-        path: /etc/systemd/system/powertop.service
+        path: /etc/cmdline.d/homelab-tuning.conf
         state: absent
 
     # -------------------------------------------------------------------------
-    # 2. Kernel Command Line Drop-Ins & Tuning
+    # 4. Update /etc/default/limine
     # -------------------------------------------------------------------------
-    - name: Ensure /etc/cmdline.d directory exists
-      ansible.builtin.file:
-        path: /etc/cmdline.d
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
+    - name: Read current /etc/default/limine content
+      ansible.builtin.command: cat /etc/default/limine
+      register: limine_default_file
+      changed_when: false
 
-    - name: Configure hardware kernel tuning drop-in
-      ansible.builtin.copy:
-        src: "{{ project_root }}/files/homelab-tuning.conf"
-        dest: /etc/cmdline.d/homelab-tuning.conf
-        owner: root
-        group: root
+    - name: Append performance parameters to KERNEL_CMDLINE[default] in /etc/default/limine
+      ansible.builtin.replace:
+        path: /etc/default/limine
+        regexp: '^(KERNEL_CMDLINE\[default\]\+=")(.*)"$'
+        replace: '\1\2 {{ tuning_cmdline }}"'
+      when: tuning_tokens[0] not in limine_default_file.stdout
+      register: limine_cmdline_updated
+
+    - name: Ensure BOOT_ORDER prioritizes main CachyOS kernel
+      ansible.builtin.lineinfile:
+        path: /etc/default/limine
+        regexp: '^BOOT_ORDER=.*'
+        line: 'BOOT_ORDER="*cachyos, *, *lts, *fallback, Snapshots"'
+        create: true
         mode: '0644'
-      notify: Regenerate initramfs
+      register: limine_order_updated
+
+    - name: Read live running /proc/cmdline for state check
+      ansible.builtin.command: cat /proc/cmdline
+      register: proc_cmdline_check
+      changed_when: false
+
+    - name: Read current /boot/limine.conf content for default_entry check
+      ansible.builtin.command: cat /boot/limine.conf
+      register: limine_conf_check
+      changed_when: false
+
+    - name: Evaluate force_rebuild fact
+      ansible.builtin.set_fact:
+        force_rebuild: >-
+          {{ (limine_cmdline_updated.changed | default(false)) or
+             (limine_order_updated.changed | default(false)) or
+             (tuning_tokens[0] not in proc_cmdline_check.stdout) or
+             ('default_entry: CachyOS/linux-cachyos' not in limine_conf_check.stdout) or
+             (force_reboot | bool) }}
 
     # -------------------------------------------------------------------------
-    # 3. CPU EPP Performance Override
+    # 5. Rebuild Bootloader Architecture (Order Matters)
+    # -------------------------------------------------------------------------
+    - name: Rebuild initramfs images for all installed kernels
+      ansible.builtin.command:
+        cmd: mkinitcpio -P
+      changed_when: true
+      when: force_rebuild
+
+    - name: Regenerate Limine entries via limine-entry-tool
+      ansible.builtin.command:
+        cmd: limine-entry-tool
+      changed_when: true
+      when: force_rebuild
+
+    - name: Disable remember_last_entry in /boot/limine.conf AFTER regeneration
+      ansible.builtin.replace:
+        path: /boot/limine.conf
+        regexp: '^\s*remember_last_entry\s*:\s*.*$'
+        replace: 'remember_last_entry: no'
+      when: force_rebuild
+
+    - name: Ensure default_entry is explicitly set in /boot/limine.conf AFTER regeneration
+      ansible.builtin.lineinfile:
+        path: /boot/limine.conf
+        regexp: '^\s*default_entry\s*:.*$'
+        line: 'default_entry: CachyOS/linux-cachyos'
+        insertafter: '^timeout:'
+        state: present
+      when: force_rebuild
+
+    # -------------------------------------------------------------------------
+    # 6. CPU EPP & Sysctl Optimizations
     # -------------------------------------------------------------------------
     - name: Force CPU EPP profile to performance
       ansible.builtin.shell:
         cmd: "echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference"
       changed_when: false
 
-    # -------------------------------------------------------------------------
-    # 4. Deploy Sysctl Performance Tuning
-    # -------------------------------------------------------------------------
-    - name: Deploy sysctl performance configuration file
+    - name: Deploy sysctl performance configuration
       ansible.builtin.copy:
         src: "{{ project_root }}/files/99-homelab-performance.conf"
         dest: /etc/sysctl.d/99-homelab-performance.conf
@@ -62,30 +144,53 @@
         mode: '0644'
       notify: Reload sysctl
 
-    # -------------------------------------------------------------------------
-    # 5. Kernel Module Loading
-    # -------------------------------------------------------------------------
-    - name: Ensure i915 module is set to load at boot
-      ansible.builtin.copy:
-        src: "{{ project_root }}/files/igpu.conf"
-        dest: /etc/modules-load.d/igpu.conf
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Load i915 module
+    - name: Load i915 kernel module
       community.general.modprobe:
         name: i915
         state: present
 
-  # ---------------------------------------------------------------------------
-  # Handlers
-  # ---------------------------------------------------------------------------
-  handlers:
-    - name: Regenerate initramfs
-      ansible.builtin.command: mkinitcpio -P
-      changed_when: true
+    # -------------------------------------------------------------------------
+    # 7. Reboot & Post-Boot Assertion
+    # -------------------------------------------------------------------------
+    - name: Reboot system into new optimized kernel
+      ansible.builtin.reboot:
+        msg: "Rebooting to apply Limine parameters and boot into linux-cachyos kernel"
+        connect_timeout: 5
+        reboot_timeout: 120
+        pre_reboot_delay: 2
+        post_reboot_delay: 5
+        test_command: uptime
+      when: force_rebuild
 
+    - name: Get running kernel version
+      ansible.builtin.command:
+        cmd: uname -r
+      register: active_kernel
+      changed_when: false
+
+    - name: Read live running kernel command line (/proc/cmdline)
+      ansible.builtin.command:
+        cmd: cat /proc/cmdline
+      register: live_cmdline
+      changed_when: false
+
+    - name: Verify running kernel is linux-cachyos
+      ansible.builtin.assert:
+        that:
+          - "'lts' not in active_kernel.stdout"
+          - "'cachyos' in active_kernel.stdout"
+        fail_msg: "Failed to boot into optimized kernel. Active kernel: {{ active_kernel.stdout }}"
+        success_msg: "Successfully booted into optimized kernel: {{ active_kernel.stdout }}"
+
+    - name: Assert active parameters are applied in /proc/cmdline
+      ansible.builtin.assert:
+        that:
+          - item in live_cmdline.stdout
+        fail_msg: "Parameter missing! Missing: {{ item }}"
+        success_msg: "Verified {{ item }} is active in /proc/cmdline"
+      loop: "{{ tuning_tokens }}"
+
+  handlers:
     - name: Reload sysctl
       ansible.builtin.command: sysctl --system
       changed_when: true
