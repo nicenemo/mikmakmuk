@@ -4,95 +4,95 @@
   hosts: cluster_nodes
   become: true
   vars:
-    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    project_root: "{{ playbook_dir | dirname }}"
 
   tasks:
     # -------------------------------------------------------------------------
-    # 1. Query Real Pre-Setup Telemetry (Btrfs Allocation & Timer Baseline)
+    # 1. Query Pre-Setup State (Timer Baseline & Btrfs Allocation)
     # -------------------------------------------------------------------------
-    - name: "Query actual pre-setup fstrim.timer active state"
-      ansible.builtin.command:
-        cmd: "systemctl is-active fstrim.timer"
+    - name: Query pre-setup fstrim.timer state
+      ansible.builtin.systemd_service:
+        name: fstrim.timer
       register: timer_pre_check
-      changed_when: false
-      failed_when: false
 
-    - name: "Query Btrfs allocation state on root volume"
-      ansible.builtin.shell:
-        cmd: "btrfs filesystem usage -b / 2>/dev/null | awk '/Free \\(estimated\\):/ {print $3}' || echo '0'"
-      register: btrfs_free_bytes_raw
+    - name: Record original fstrim.timer state for teardown
+      ansible.builtin.import_tasks: tasks/save-local-state.yml
+      vars:
+        local_state_name: trim
+        local_state:
+          timer_enabled: "{{ timer_pre_check.status.UnitFileState == 'enabled' }}"
+          timer_active: "{{ timer_pre_check.status.ActiveState == 'active' }}"
+
+    - name: Query Btrfs allocation state on root volume
+      ansible.builtin.command:
+        cmd: btrfs filesystem usage --raw /
+      register: btrfs_usage_raw
       changed_when: false
 
-    - name: "Calculate optimal initial TRIM extent threshold"
+    - name: Calculate optimal initial TRIM extent threshold
       ansible.builtin.set_fact:
-        calculated_min_trim: >-
-          {%- set free_gb = (btrfs_free_bytes_raw.stdout | float / 1073741824) -%}
-          {%- if free_gb > 100 -%}16M
-          {%- elif free_gb > 20 -%}8M
-          {%- else -%}2M
-          {%- endif -%}
+        calculated_min_trim: "{{ '16M' if free_gib | float > 100 else ('8M' if free_gib | float > 20 else '2M') }}"
+      vars:
+        free_gib: >-
+          {{ (btrfs_usage_raw.stdout | regex_findall('Free \(estimated\):\s+([0-9]+)')
+              | map('int') | first | default(0)) / 1073741824 }}
 
     # -------------------------------------------------------------------------
     # 2. Execute Smart Active Btrfs TRIM
     # -------------------------------------------------------------------------
-    - name: "Execute active fstrim using dynamic extent threshold on /"
+    - name: Execute active fstrim using dynamic extent threshold on /
       ansible.builtin.command:
-        cmd: "fstrim -v -m {{ calculated_min_trim | trim }} /"
+        cmd: "fstrim --verbose --minimum {{ calculated_min_trim }} /"
       register: fstrim_out
-      changed_when:
-        - "'trimmed' in fstrim_out.stdout"
-        - "not '0 B' in fstrim_out.stdout"
+      changed_when: "'(0 bytes) trimmed' not in fstrim_out.stdout"
 
     # -------------------------------------------------------------------------
     # 3. Configure Smart Systemd Automated Maintenance
     # -------------------------------------------------------------------------
-    - name: "Ensure systemd service drop-in directory exists for fstrim"
+    - name: Ensure systemd service drop-in directory exists for fstrim
       ansible.builtin.file:
         path: /etc/systemd/system/fstrim.service.d
         state: directory
-        mode: '0755'
+        mode: "0755"
 
-    - name: "Deploy smart override for weekly fstrim service"
+    - name: Deploy smart override for weekly fstrim service
       ansible.builtin.copy:
         dest: /etc/systemd/system/fstrim.service.d/override.conf
         content: |
           [Service]
           ExecStart=
           ExecStart=/usr/bin/fstrim -v -m 8M /
-        mode: '0644'
-      register: override_conf
+        mode: "0644"
+      notify: Reload systemd
 
-    - name: "Reload systemd daemon if configuration changed"
-      ansible.builtin.systemd:
-        daemon_reload: true
-      when: override_conf.changed
+    - name: Apply systemd unit changes
+      ansible.builtin.meta: flush_handlers
 
-    - name: "Enable and start weekly fstrim.timer"
-      ansible.builtin.systemd:
+    - name: Enable and start weekly fstrim.timer
+      ansible.builtin.systemd_service:
         name: fstrim.timer
         state: started
         enabled: true
-
-    # -------------------------------------------------------------------------
-    # 4. Query Actual Post-Setup Telemetry & Display Summary
-    # -------------------------------------------------------------------------
-    - name: "Query actual post-setup fstrim.timer active state"
-      ansible.builtin.command:
-        cmd: "systemctl is-active fstrim.timer"
       register: timer_post_check
-      changed_when: false
-      failed_when: false
 
-    - name: "Store verified node TRIM facts"
+    # -------------------------------------------------------------------------
+    # 4. Display Summary
+    # -------------------------------------------------------------------------
+    - name: Store verified node TRIM facts
       ansible.builtin.set_fact:
         node_trim_metrics:
           target_mount: "/"
-          applied_threshold: "{{ calculated_min_trim | trim }}"
-          trim_output: "{{ fstrim_out.stdout | trim if fstrim_out.changed else '0 B trimmed (Up to date)' }}"
-          timer_pre_status: "{{ timer_pre_check.stdout | trim | capitalize }}"
-          timer_post_status: "{{ timer_post_check.stdout | trim | capitalize }}"
+          applied_threshold: "{{ calculated_min_trim }}"
+          trim_output: "{{ fstrim_out.stdout | trim }}"
+          timer_pre_status: "{{ timer_pre_check.status.ActiveState | capitalize }}"
+          timer_post_status: "{{ timer_post_check.status.ActiveState | default('active') | capitalize }}"
 
-    - name: "Display Storage TRIM Summary"
+    - name: Display Storage TRIM Summary
       ansible.builtin.debug:
-        msg: "{{ lookup('template', project_root ~ '/templates/trim_summary_report.j2').split('\n') }}"
-      run_once: true
+        msg: "{{ lookup('ansible.builtin.template', project_root ~ '/templates/trim_summary_report.j2').splitlines() }}"
+      when: inventory_hostname == ansible_play_hosts | first
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true

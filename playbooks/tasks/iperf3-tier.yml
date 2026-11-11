@@ -1,0 +1,44 @@
+---
+# Runs one full-mesh iperf3 pass over a single network tier and appends the
+# results to `network_results`. Expects iperf3.service running on every host.
+# Imported statically so every host runs each step in lockstep.
+# Required vars: iperf3_tier (label), iperf3_ip_fact (name of the per-host IP fact)
+- name: "Wait for iperf3 server to listen on network tier {{ iperf3_tier }}"
+  ansible.builtin.wait_for:
+    host: "{{ hostvars[inventory_hostname][iperf3_ip_fact] }}"
+    port: "{{ iperf3_port }}"
+    timeout: 15
+
+- name: "Run iperf3 tests to all peers over {{ iperf3_tier }}"
+  ansible.builtin.command:
+    cmd: >-
+      iperf3 --client {{ hostvars[iperf3_peer][iperf3_ip_fact] }}
+      --bind {{ hostvars[inventory_hostname][iperf3_ip_fact] }}
+      --port {{ iperf3_port }} --time {{ iperf3_duration_s }} --parallel {{ iperf3_parallel_streams }} --json
+  loop: "{{ ansible_play_hosts | difference([inventory_hostname]) }}"
+  loop_control:
+    loop_var: iperf3_peer
+    label: "{{ iperf3_tier }}: {{ inventory_hostname }} -> {{ iperf3_peer }}"
+  # One host at a time, so tests never compete for bandwidth.
+  throttle: 1
+  register: iperf3_runs
+  changed_when: false
+
+- name: "Record iperf3 results for network tier {{ iperf3_tier }}"
+  ansible.builtin.set_fact:
+    network_results: >-
+      {{ network_results | default([]) + [{
+            'tier': iperf3_tier,
+            'source': inventory_hostname,
+            'target': item.iperf3_peer,
+            'source_ip': hostvars[inventory_hostname][iperf3_ip_fact],
+            'target_ip': hostvars[item.iperf3_peer][iperf3_ip_fact],
+            'sent_gbps': (iperf3_summary.sum_sent.bits_per_second / 1e9) | round(2),
+            'received_gbps': (iperf3_summary.sum_received.bits_per_second / 1e9) | round(2),
+            'retransmits': iperf3_summary.sum_sent.retransmits | default(none)
+          }] }}
+  loop: "{{ iperf3_runs.results }}"
+  loop_control:
+    label: "{{ iperf3_tier }}: {{ inventory_hostname }} -> {{ item.iperf3_peer }}"
+  vars:
+    iperf3_summary: "{{ (item.stdout | from_json).end }}"

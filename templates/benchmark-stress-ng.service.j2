@@ -1,0 +1,8 @@
+# Runtime all-core CPU load for playbooks/benchmark-full-load.yml (lives in /run, gone after reboot).
+[Unit]
+Description=All-core stress-ng load for Mik Mak Muk full-load benchmark
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/stress-ng --cpu {{ ansible_facts['processor_vcpus'] }} --cpu-method {{ full_load_cpu_method }} \
+    --timeout {{ full_load_cpu_timeout_s }}s --metrics-brief --yaml {{ full_load_metrics_file.path }}

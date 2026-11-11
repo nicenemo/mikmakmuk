@@ -1,0 +1,22 @@
+---
+# Records pre-setup state as an Ansible local fact so the matching teardown
+# playbook can restore it: /etc/ansible/facts.d/mikmakmuk_<local_state_name>.fact
+# (read back as ansible_local['mikmakmuk_<local_state_name>']).
+# Required vars: local_state_name, local_state (dict)
+# Optional: local_state_force (default false = keep the first recorded state)
+- name: Ensure Ansible local facts directory exists
+  ansible.builtin.file:
+    path: /etc/ansible/facts.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "Record pre-setup state for teardown in {{ local_state_name }}"
+  ansible.builtin.copy:
+    content: "{{ local_state | to_nice_json(indent=2) }}\n"
+    dest: "/etc/ansible/facts.d/mikmakmuk_{{ local_state_name }}.fact"
+    owner: root
+    group: root
+    mode: "0644"
+    force: "{{ local_state_force | default(false) }}"

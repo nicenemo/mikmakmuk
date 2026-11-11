@@ -1,7 +1,7 @@
 =========================================================================
           CLUSTER SMART STORAGE TRIM & MAINTENANCE REPORT
 =========================================================================
-{% for host in groups['cluster_nodes'] %}
+{% for host in ansible_play_hosts %}
 NODE: {{ host.upper() }}
 {% set m = hostvars[host].get('node_trim_metrics', {}) %}
   Target Volume            : {{ m.target_mount | default('N/A') }}

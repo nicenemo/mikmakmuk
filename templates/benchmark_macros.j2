@@ -1,0 +1,24 @@
+{#- Shared formatting helpers for benchmark_report.md.j2 -#}
+
+{#- Unit suffix (with leading space) for a layout entry, empty when it has no unit -#}
+{%- macro unit(metric) -%}
+{{ (' ' ~ metric.unit) if metric.unit is defined else '' }}
+{%- endmacro -%}
+
+{#- Format one metric value using the layout entry from playbooks/vars/benchmark.yml -#}
+{%- macro fmt(value, metric) -%}
+{%- if value is none or value is undefined or value == '' -%}
+n/a
+{%- elif value is boolean -%}
+{{ 'yes' if value else 'no' }}
+{%- elif value is number -%}
+{{ ('%.' ~ (metric.precision | default(1)) ~ 'f') | format(value) }}{{ unit(metric) }}
+{%- else -%}
+{{ value }}{{ unit(metric) }}
+{%- endif -%}
+{%- endmacro -%}
+
+{#- Newest generated_at timestamp across the hosts of one benchmark -#}
+{%- macro collected_at(per_host) -%}
+{{ per_host.values() | map(attribute='generated_at') | max }}
+{%- endmacro -%}

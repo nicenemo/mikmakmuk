@@ -1,0 +1,29 @@
+---
+# Writes one host's benchmark result to the controller as JSON:
+#   <benchmark_results_dir>/<benchmark_name>/<inventory_hostname>.json
+# Required vars: benchmark_name, benchmark_result (dict)
+- name: Ensure benchmark result directory exists on controller
+  ansible.builtin.file:
+    path: "{{ benchmark_results_dir }}/{{ benchmark_name }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+
+- name: Write benchmark result JSON to controller
+  ansible.builtin.copy:
+    content: >-
+      {{ {
+            'benchmark': benchmark_name,
+            'host': inventory_hostname,
+            'generated_at': now(utc=true).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'result': benchmark_result
+          } | to_nice_json(indent=2) }}
+    dest: "{{ benchmark_results_dir }}/{{ benchmark_name }}/{{ inventory_hostname }}.json"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+
+- name: Show benchmark result
+  ansible.builtin.debug:
+    var: benchmark_result

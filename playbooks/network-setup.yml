@@ -3,8 +3,6 @@
 - name: Configure USB-C Cluster Network & Verify Interface State
   hosts: cluster_nodes
   become: true
-  vars:
-    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
 
   tasks:
     # -------------------------------------------------------------------------
@@ -16,7 +14,7 @@
         state: present
 
     - name: Ensure NetworkManager service is enabled and running
-      ansible.builtin.systemd:
+      ansible.builtin.systemd_service:
         name: NetworkManager
         enabled: true
         state: started
@@ -58,47 +56,42 @@
         ip4: "{{ cluster_ip }}/24"
         mtu: 9000
         state: present
+      register: nmcli_profile
 
-    - name: Force activation of cluster connection profile
-      ansible.builtin.command:
-        cmd: "nmcli connection up '{{ cluster_connection_name }}'"
-      register: nmcli_up
-      changed_when: "'Connection successfully activated' in nmcli_up.stdout"
+    - name: Activate cluster connection profile (re-applied when the profile changed)
+      community.general.nmcli:
+        conn_name: "{{ cluster_connection_name }}"
+        conn_reload: "{{ nmcli_profile is changed }}"
+        state: up
 
     # -------------------------------------------------------------------------
-    # 4. Reliable Non-Ping Verification & Link Speed Assertion
+    # 4. Verification from Interface Facts & Link Speed Assertion
     # -------------------------------------------------------------------------
-    - name: Verify connection profile active state in NetworkManager
-      ansible.builtin.command:
-        cmd: "nmcli connection show --active"
-      register: nmcli_active
-      changed_when: false
-      failed_when: cluster_connection_name not in nmcli_active.stdout
+    - name: Refresh network interface facts
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - network
 
-    - name: Verify physical link state up via ip-link
-      ansible.builtin.command:
-        cmd: "ip link show dev {{ discovered_usb_iface }}"
-      register: link_state
-      changed_when: false
-      failed_when: "'state UP' not in link_state.stdout and 'LOWER_UP' not in link_state.stdout"
-
-    - name: Verify static IP address assigned to interface
-      ansible.builtin.command:
-        cmd: "ip -4 addr show dev {{ discovered_usb_iface }}"
-      register: ip_state
-      changed_when: false
-      failed_when: cluster_ip not in ip_state.stdout
-
-    - name: Query negotiated link speed via sysfs
-      ansible.builtin.command:
-        cmd: "cat /sys/class/net/{{ discovered_usb_iface }}/speed"
-      register: link_speed_raw
-      changed_when: false
-      failed_when: false
+    - name: Verify cluster interface is up with its static IP and jumbo frames
+      ansible.builtin.assert:
+        that:
+          - cluster_iface_facts['active'] | bool
+          - cluster_iface_facts['ipv4']['address'] | default('') == cluster_ip
+          - cluster_iface_facts['mtu'] | int == 9000
+        fail_msg: >-
+          {{ discovered_usb_iface }}: active={{ cluster_iface_facts['active'] }},
+          ipv4={{ cluster_iface_facts['ipv4']['address'] | default('none') }}, mtu={{ cluster_iface_facts['mtu'] }}
+        quiet: true
+      vars:
+        cluster_iface_facts: "{{ ansible_facts[discovered_usb_iface | replace('-', '_')] }}"
 
     - name: Set formatted link speed fact
       ansible.builtin.set_fact:
-        negotiated_link_speed: "{{ link_speed_raw.stdout ~ ' Mbps' if (link_speed_raw.rc == 0 and link_speed_raw.stdout | length > 0) else 'Unknown (Link Down/Unnegotiated)' }}"
+        negotiated_link_speed: >-
+          {{ (link_speed ~ ' Mbps') if link_speed | int > 0 else 'Unknown (Link Down/Unnegotiated)' }}
+      vars:
+        link_speed: "{{ ansible_facts[discovered_usb_iface | replace('-', '_')]['speed'] | default(-1) }}"
 
     - name: Display cluster network verification summary
       ansible.builtin.debug:
@@ -108,6 +101,6 @@
           - "Interface: {{ discovered_usb_iface }}"
           - "Assigned IP: {{ cluster_ip }}/24 (MTU 9000)"
           - "Profile '{{ cluster_connection_name }}' ACTIVE"
-          - "Physical Link State: UP"
+          - "Physical Link State: UP (MTU 9000 verified)"
           - "Negotiated Link Speed: {{ negotiated_link_speed }}"
           - "=========================================================="

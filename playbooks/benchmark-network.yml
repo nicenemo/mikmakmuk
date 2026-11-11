@@ -1,0 +1,84 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Benchmark 1 GbE management and 2.5 GbE cluster networks (iperf3 full mesh)
+  hosts: cluster_nodes
+  become: true
+  vars_files:
+    - vars/benchmark.yml
+  vars:
+    # Port of the packaged iperf3.service (plain `iperf3 -s`)
+    iperf3_port: 5201
+    iperf3_duration_s: 10
+    iperf3_parallel_streams: 4
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Dependencies & Address Discovery
+    # -------------------------------------------------------------------------
+    - name: Install network benchmark tooling
+      community.general.pacman:
+        name: "{{ benchmark_tool_packages.network }}"
+        state: present
+
+    - name: Determine 1 GbE management and 2.5 GbE cluster addresses
+      ansible.builtin.set_fact:
+        network_mgmt_ip: "{{ ansible_facts['default_ipv4']['address'] }}"
+        network_cluster_ip: "{{ cluster_ip | regex_replace('/.*$', '') }}"
+        network_results: []
+
+    # -------------------------------------------------------------------------
+    # 2. Full-Mesh Benchmark (firewall rule always removed afterwards)
+    # -------------------------------------------------------------------------
+    - name: Run full-mesh iperf3 benchmark
+      block:
+        - name: Allow iperf3 port through UFW for the benchmark
+          community.general.ufw:
+            rule: allow
+            port: "{{ iperf3_port | string }}"
+            proto: tcp
+            comment: Temporary iperf3 benchmark
+
+        - name: Start packaged iperf3 server service
+          ansible.builtin.systemd_service:
+            name: iperf3.service
+            state: started
+
+        - name: Benchmark 1 GbE management network
+          ansible.builtin.import_tasks: tasks/iperf3-tier.yml
+          vars:
+            iperf3_tier: 1 GbE
+            iperf3_ip_fact: network_mgmt_ip
+
+        - name: Benchmark 2.5 GbE cluster network
+          ansible.builtin.import_tasks: tasks/iperf3-tier.yml
+          vars:
+            iperf3_tier: 2.5 GbE
+            iperf3_ip_fact: network_cluster_ip
+
+      always:
+        - name: Stop packaged iperf3 server service
+          ansible.builtin.systemd_service:
+            name: iperf3.service
+            state: stopped
+
+        - name: Remove temporary iperf3 UFW rule
+          community.general.ufw:
+            rule: allow
+            port: "{{ iperf3_port | string }}"
+            proto: tcp
+            comment: Temporary iperf3 benchmark
+            delete: true
+
+    # -------------------------------------------------------------------------
+    # 3. Save Results
+    # -------------------------------------------------------------------------
+    - name: Save network benchmark result
+      ansible.builtin.import_tasks: tasks/save-benchmark-result.yml
+      vars:
+        benchmark_name: network
+        benchmark_result:
+          management_ip: "{{ network_mgmt_ip }}"
+          cluster_ip: "{{ network_cluster_ip }}"
+          duration_s: "{{ iperf3_duration_s }}"
+          parallel_streams: "{{ iperf3_parallel_streams }}"
+          tests: "{{ network_results }}"

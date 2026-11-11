@@ -1,0 +1,23 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Generate Markdown benchmark report from collected JSON results
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars_files:
+    - vars/benchmark.yml
+
+  tasks:
+    - name: Load collected benchmark results
+      ansible.builtin.import_tasks: tasks/load-benchmark-results.yml
+
+    - name: Render Markdown benchmark report
+      ansible.builtin.template:
+        src: "{{ project_root }}/templates/benchmark_report.md.j2"
+        dest: "{{ benchmark_report_path }}"
+        mode: "0644"
+
+    - name: Show report location
+      ansible.builtin.debug:
+        msg: "Benchmark report written to {{ benchmark_report_path }}"

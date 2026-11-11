@@ -1,0 +1,24 @@
+---
+# Reads lm_sensors JSON output and sets `sensor_temps` with the CPU package and
+# NVMe composite temperatures in °C (null when a sensor is not present).
+- name: Read hardware sensors as JSON
+  ansible.builtin.command:
+    cmd: sensors -j
+  register: sensors_raw
+  changed_when: false
+
+- name: Parse sensors JSON output
+  ansible.builtin.set_fact:
+    sensors_json: "{{ sensors_raw.stdout | from_json }}"
+
+- name: Extract CPU package and NVMe composite temperatures
+  ansible.builtin.set_fact:
+    sensor_temps:
+      cpu_package_c: >-
+        {{ (sensors_json | dict2items | selectattr('key', 'match', '^coretemp-') | map(attribute='value')
+            | first | default({}))['Package id 0'] | default({}) | dict2items
+            | selectattr('key', 'match', '^temp[0-9]+_input$') | map(attribute='value') | first | default(none) }}
+      nvme_c: >-
+        {{ (sensors_json | dict2items | selectattr('key', 'match', '^nvme-') | map(attribute='value')
+            | first | default({}))['Composite'] | default({}) | dict2items
+            | selectattr('key', 'match', '^temp[0-9]+_input$') | map(attribute='value') | first | default(none) }}

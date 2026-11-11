@@ -1,0 +1,29 @@
+---
+# Discovers the Btrfs root filesystem and its current /etc/fstab entry. Sets:
+#   root_uuid, root_fstab_opts (string), root_subvol_opts (list of subvol=/subvolid= options)
+- name: Extract root filesystem mount facts
+  ansible.builtin.set_fact:
+    root_mount: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | first }}"
+
+- name: Verify root filesystem is Btrfs
+  ansible.builtin.assert:
+    that:
+      - root_mount.fstype == "btrfs"
+    fail_msg: "Host {{ inventory_hostname }} root filesystem is {{ root_mount.fstype }}, expected Btrfs!"
+    quiet: true
+
+- name: Read /etc/fstab
+  ansible.builtin.slurp:
+    src: /etc/fstab
+  register: fstab_raw
+
+- name: Extract root filesystem UUID and fstab options
+  ansible.builtin.set_fact:
+    root_uuid: "{{ root_mount.uuid }}"
+    root_fstab_opts: >-
+      {{ (fstab_raw.content | b64decode)
+          | regex_findall('(?m)^\s*\S+\s+/\s+btrfs\s+(\S+)') | first | default('defaults') }}
+
+- name: Extract subvolume options that must be preserved
+  ansible.builtin.set_fact:
+    root_subvol_opts: "{{ root_fstab_opts.split(',') | select('match', '^subvol(id)?=') | list }}"

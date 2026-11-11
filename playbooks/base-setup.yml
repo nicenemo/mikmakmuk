@@ -1,10 +1,10 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: Apply Base System Optimizations and Configuration
+- name: Apply Base System Packages and Environment Configuration
   hosts: cluster_nodes
   become: true
   vars:
-    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    base_packages: "{{ (common_packages | default([])) + (node_packages | default([])) }}"
 
   tasks:
     # -------------------------------------------------------------------------
@@ -20,52 +20,59 @@
         cmd: pacman-key --populate archlinux cachyos
       changed_when: false
 
-    - name: Clean potentially corrupted pacman sync databases
-      ansible.builtin.file:
-        path: /var/lib/pacman/sync
-        state: absent
-
-    - name: Re-create pacman sync directory
-      ansible.builtin.file:
-        path: /var/lib/pacman/sync
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-
-    - name: Force refresh pacman databases and update keyrings directly
-      ansible.builtin.command:
-        cmd: pacman -Sy --noconfirm archlinux-keyring cachyos-keyring
-      changed_when: true
-
-    - name: Wipe pacman package cache directory
-      ansible.builtin.file:
-        path: /var/cache/pacman/pkg
-        state: absent
-
-    - name: Recreate clean pacman package cache directory
-      ansible.builtin.file:
-        path: /var/cache/pacman/pkg
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-
-    - name: Upgrade all system packages (including multilib sync)
-      ansible.builtin.command:
-        cmd: pacman -Syu --noconfirm
-      register: pacman_upgrade_result
-      changed_when: "'there is nothing to do' not in pacman_upgrade_result.stdout"
-
-    - name: Install baseline hardware drivers
+    # Keyrings first so the full upgrade below never fails on new signing keys.
+    - name: Refresh package databases and update keyrings
       community.general.pacman:
         name:
-          - intel-media-driver
-          - libva-intel-driver
-          - mesa
-        state: present
+          - archlinux-keyring
+          - cachyos-keyring
+        state: latest
+        update_cache: true
+
+    - name: Upgrade all system packages
+      community.general.pacman:
+        upgrade: true
+
+    # -------------------------------------------------------------------------
+    # 2. Record & Install Base Packages
+    # -------------------------------------------------------------------------
+    - name: Gather installed package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    # Only packages that setup actually installs are recorded, so teardown never
+    # removes software that was present before setup (merged across runs).
+    - name: Record packages installed by setup
+      ansible.builtin.import_tasks: tasks/save-local-state.yml
+      vars:
+        local_state_name: base
+        local_state_force: true
+        local_state:
+          installed_packages: >-
+            {{ ((ansible_local['mikmakmuk_base']['installed_packages'] | default([]))
+                + (base_packages | difference(ansible_facts['packages'] | list)))
+                | unique | sort }}
 
     - name: Install common_packages and node_packages from inventory
       community.general.pacman:
-        name: "{{ (common_packages | default([])) + (node_packages | default([])) }}"
+        name: "{{ base_packages }}"
         state: present
+
+    # -------------------------------------------------------------------------
+    # 3. System Environment Drop-Ins
+    # -------------------------------------------------------------------------
+    - name: Ensure /etc/environment.d directory exists
+      ansible.builtin.file:
+        path: /etc/environment.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy iGPU DRI & OpenCL environment drop-in
+      ansible.builtin.copy:
+        src: "{{ playbook_dir | dirname }}/files/99-homelab-igpu-dri.conf"
+        dest: /etc/environment.d/99-homelab-igpu-dri.conf
+        owner: root
+        group: root
+        mode: "0644"

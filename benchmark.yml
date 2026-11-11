@@ -1,0 +1,28 @@
+#!/usr/bin/env ansible-playbook
+---
+# =============================================================================
+# Master Benchmark Orchestrator
+# Each benchmark writes JSON to $MIKMAKMUK_BENCHMARK_DIR (default
+# /tmp/mikmakmuk-benchmarks); the report playbook turns those into Markdown.
+# Ordered from least to most heat so thermal readings start close to idle.
+# =============================================================================
+- name: Import Hardware Audit Playbook
+  ansible.builtin.import_playbook: playbooks/benchmark-hardware.yml
+
+- name: Import Network Benchmark Playbook
+  ansible.builtin.import_playbook: playbooks/benchmark-network.yml
+
+- name: Import SSD Benchmark Playbook
+  ansible.builtin.import_playbook: playbooks/benchmark-ssd.yml
+
+- name: Import CPU Benchmark Playbook
+  ansible.builtin.import_playbook: playbooks/benchmark-cpu.yml
+
+- name: Import iGPU Benchmark Playbook
+  ansible.builtin.import_playbook: playbooks/benchmark-igpu.yml
+
+- name: Import Combined Load Benchmark Playbook
+  ansible.builtin.import_playbook: playbooks/benchmark-full-load.yml
+
+- name: Import Benchmark Report Playbook
+  ansible.builtin.import_playbook: playbooks/benchmark-report.yml

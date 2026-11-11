@@ -1,0 +1,140 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Benchmark NVMe SSD throughput, fsync latency and thermal behaviour
+  hosts: cluster_nodes
+  become: true
+  vars_files:
+    - vars/benchmark.yml
+  vars:
+    ssd_bench_dir: /var/tmp
+    ssd_seq_file: "{{ ssd_bench_dir }}/fio_test_seq.img"
+    ssd_sync_file: "{{ ssd_bench_dir }}/fio_test_sync.img"
+    # NVMe "data units" are 1000 x 512-byte blocks.
+    ssd_nvme_data_unit_bytes: 512000
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Dependencies, Device Discovery & Pre-Test Telemetry
+    # -------------------------------------------------------------------------
+    - name: Install storage benchmark tooling
+      community.general.pacman:
+        name: "{{ benchmark_tool_packages.ssd + ['smartmontools', 'lm_sensors'] }}"
+        state: present
+
+    - name: Select primary NVMe namespace
+      ansible.builtin.set_fact:
+        ssd_device: "/dev/{{ ansible_facts['devices'] | list | select('match', '^nvme[0-9]+n[0-9]+$') | sort | first }}"
+
+    - name: Query NVMe identity and SMART health as JSON
+      ansible.builtin.command:
+        cmd: "smartctl --json --all {{ ssd_device }}"
+      register: ssd_smart_raw
+      changed_when: false
+      # smartctl exit status is a bitmask; only bits 0-1 (bad arguments / device open failure) are fatal.
+      failed_when: ssd_smart_raw.rc % 4 != 0
+
+    - name: Read idle temperatures
+      ansible.builtin.import_tasks: tasks/read-sensors.yml
+
+    - name: Record idle temperatures
+      ansible.builtin.set_fact:
+        ssd_temps_idle: "{{ sensor_temps }}"
+
+    # -------------------------------------------------------------------------
+    # 2. fio Benchmarks (always cleaned up)
+    # -------------------------------------------------------------------------
+    - name: Run fio benchmarks
+      block:
+        - name: Run direct sequential write benchmark (128k, direct I/O, incompressible)
+          ansible.builtin.command:
+            cmd: >-
+              fio --name=seq_write --filename={{ ssd_seq_file }} --size=2G --rw=write --bs=128k
+              --direct=1 --refill_buffers --buffer_compress_percentage=0 --ioengine=libaio --iodepth=4
+              --runtime=20 --time_based --output-format=json
+          register: ssd_fio_seq_raw
+          changed_when: false
+
+        - name: Run fsync commit latency benchmark (4k random write, fsync=1)
+          ansible.builtin.command:
+            cmd: >-
+              fio --name=sync_write --filename={{ ssd_sync_file }} --size=512M --rw=randwrite --bs=4k
+              --direct=1 --fsync=1 --refill_buffers --buffer_compress_percentage=0 --ioengine=libaio --iodepth=1
+              --runtime=15 --time_based --output-format=json
+          register: ssd_fio_sync_raw
+          changed_when: false
+
+      always:
+        - name: Remove fio test files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - "{{ ssd_seq_file }}"
+            - "{{ ssd_sync_file }}"
+
+    # -------------------------------------------------------------------------
+    # 3. Post-Cleanup TRIM (dynamic extent threshold, see trim-setup.yml)
+    # -------------------------------------------------------------------------
+    - name: Query Btrfs allocation state on root volume
+      ansible.builtin.command:
+        cmd: btrfs filesystem usage --raw /
+      register: ssd_btrfs_usage_raw
+      changed_when: false
+
+    - name: Calculate TRIM extent threshold from free space
+      ansible.builtin.set_fact:
+        ssd_min_trim: "{{ '16M' if ssd_free_gib | float > 100 else ('8M' if ssd_free_gib | float > 20 else '2M') }}"
+      vars:
+        ssd_free_gib: >-
+          {{ (ssd_btrfs_usage_raw.stdout | regex_findall('Free \(estimated\):\s+([0-9]+)')
+              | map('int') | first | default(0)) / 1073741824 }}
+
+    - name: Discard blocks freed by the benchmark files
+      ansible.builtin.command:
+        cmd: "fstrim --verbose --minimum {{ ssd_min_trim }} /"
+      register: ssd_fstrim_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 4. Post-Test Telemetry, Compile & Save Results
+    # -------------------------------------------------------------------------
+    - name: Read post-test temperatures
+      ansible.builtin.import_tasks: tasks/read-sensors.yml
+
+    - name: Parse SMART and fio JSON output
+      ansible.builtin.set_fact:
+        ssd_smart: "{{ ssd_smart_raw.stdout | from_json }}"
+        ssd_seq_write: "{{ (ssd_fio_seq_raw.stdout | from_json).jobs[0].write }}"
+        ssd_sync_write: "{{ (ssd_fio_sync_raw.stdout | from_json).jobs[0].write }}"
+
+    - name: Compile SSD benchmark result
+      ansible.builtin.set_fact:
+        ssd_result:
+          device: "{{ ssd_device }}"
+          drive_model: "{{ ssd_smart.model_name | default(none) }}"
+          firmware: "{{ ssd_smart.firmware_version | default(none) }}"
+          capacity_gb: "{{ ((ssd_smart.user_capacity.bytes | default(0)) / 1e9) | round(0) | int }}"
+          wear_pct: "{{ ssd_health.percentage_used | default(none) }}"
+          data_written_tb: >-
+            {{ ((ssd_health.data_units_written * ssd_nvme_data_unit_bytes) / 1e12) | round(2)
+                if ssd_health.data_units_written is defined else none }}
+          power_on_hours: "{{ ssd_health.power_on_hours | default(none) }}"
+          media_errors: "{{ ssd_health.media_errors | default(none) }}"
+          seq_write_mib_s: "{{ (ssd_seq_write.bw_bytes / 1048576) | round(1) }}"
+          seq_write_iops: "{{ ssd_seq_write.iops | round(0) | int }}"
+          fsync_write_mib_s: "{{ (ssd_sync_write.bw_bytes / 1048576) | round(2) }}"
+          fsync_write_iops: "{{ ssd_sync_write.iops | round(0) | int }}"
+          fsync_lat_avg_us: "{{ (ssd_sync_write.clat_ns.mean / 1000) | round(1) }}"
+          fsync_lat_p99_us: "{{ (ssd_sync_write.clat_ns.percentile['99.000000'] / 1000) | round(1) }}"
+          nvme_temp_idle_c: "{{ ssd_temps_idle.nvme_c }}"
+          nvme_temp_post_c: "{{ sensor_temps.nvme_c }}"
+          trim_threshold: "{{ ssd_min_trim }}"
+          trim_output: "{{ ssd_fstrim_raw.stdout | trim }}"
+      vars:
+        ssd_health: "{{ ssd_smart.nvme_smart_health_information_log | default({}) }}"
+
+    - name: Save SSD benchmark result
+      ansible.builtin.import_tasks: tasks/save-benchmark-result.yml
+      vars:
+        benchmark_name: ssd
+        benchmark_result: "{{ ssd_result }}"

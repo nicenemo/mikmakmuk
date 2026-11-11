@@ -1,0 +1,117 @@
+---
+# =============================================================================
+# Shared benchmark settings (loaded via vars_files by every benchmark playbook)
+# =============================================================================
+
+# All playbooks loading this file live in playbooks/, so the repo root is its parent.
+project_root: "{{ playbook_dir | dirname }}"
+
+# Raw JSON results are written on the controller, outside the repository.
+# Layout: <benchmark_results_dir>/<benchmark>/<host>.json
+benchmark_results_dir: >-
+  {{ lookup('ansible.builtin.env', 'MIKMAKMUK_BENCHMARK_DIR', default='/tmp/mikmakmuk-benchmarks') }}
+benchmark_report_path: "{{ benchmark_results_dir }}/benchmark-report.md"
+
+# Benchmark-only tooling. Installed on demand by the benchmark playbooks and
+# removed again by base-teardown.yml (base-setup.yml does not install these).
+benchmark_tool_packages:
+  cpu:
+    - sysbench
+    - stress-ng
+  igpu:
+    - clpeak
+    - vkmark
+    - glmark2
+    - weston
+  ssd:
+    - fio
+  network:
+    - iperf3
+
+# Kernel log patterns that indicate thermal or power-limit throttling.
+benchmark_throttle_pattern: "(throttl|downclock|overtemp|pkg_power_limit|power limit|prochot|thermtrip)"
+
+# -----------------------------------------------------------------------------
+# Report layout for the Markdown report.
+# precision = decimals for numeric values; unit is appended when present.
+# -----------------------------------------------------------------------------
+benchmark_report_sections:
+  - key: hardware
+    title: Hardware & Power Audit
+    metrics:
+      - {key: cpu_model, label: CPU model}
+      - {key: kernel, label: Kernel}
+      - {key: microcode, label: Microcode}
+      - {key: scaling_driver, label: Scaling driver}
+      - {key: scaling_governor, label: Governor}
+      - {key: energy_performance_preference, label: EPP}
+      - {key: turbo_enabled, label: Turbo boost}
+      - {key: cpu_max_mhz, label: CPU max clock, unit: MHz, precision: 0}
+      - {key: memory_total_gib, label: Installed memory, unit: GiB, precision: 1}
+      - {key: memory_dimms, label: Populated SO-DIMMs, precision: 0}
+      - {key: memory_configured_mts, label: Memory speed, unit: MT/s, precision: 0}
+      - {key: igpu_driver, label: iGPU driver}
+      - {key: igpu_max_mhz, label: iGPU max clock, unit: MHz, precision: 0}
+      - {key: vtx_enabled, label: VT-x}
+      - {key: iommu_enabled, label: IOMMU (VT-d)}
+
+  - key: cpu
+    title: CPU & Memory
+    metrics:
+      - {key: sysbench_single_eps, label: Sysbench single-thread, unit: events/s, precision: 1}
+      - {key: sysbench_multi_eps, label: Sysbench multi-thread, unit: events/s, precision: 1}
+      - {key: stress_ng_bogo_ops_per_s, label: stress-ng matrixprod (60 s), unit: bogo ops/s, precision: 0}
+      - {key: memory_read_mib_s, label: Memory sequential read, unit: MiB/s, precision: 0}
+      - {key: memory_write_mib_s, label: Memory sequential write, unit: MiB/s, precision: 0}
+      - {key: cpu_temp_idle_c, label: CPU package idle, unit: °C, precision: 1}
+      - {key: cpu_temp_post_c, label: CPU package after test, unit: °C, precision: 1}
+      - {key: throttle_event_count, label: Throttle events, precision: 0}
+
+  - key: igpu
+    title: Integrated GPU (UHD 630)
+    metrics:
+      - {key: gpu_model, label: GPU}
+      - {key: opencl_compute_units, label: OpenCL compute units, precision: 0}
+      - {key: max_freq_mhz, label: Max clock, unit: MHz, precision: 0}
+      - {key: opencl_sp_gflops, label: OpenCL FP32 peak, unit: GFLOPS, precision: 1}
+      - {key: vulkan_sp_gflops, label: Vulkan FP32 peak, unit: GFLOPS, precision: 1}
+      - {key: opencl_bandwidth_gbs, label: OpenCL memory bandwidth, unit: GB/s, precision: 1}
+      - {key: vulkan_bandwidth_gbs, label: Vulkan memory bandwidth, unit: GB/s, precision: 1}
+      - {key: vaapi_profile_count, label: VA-API profiles, precision: 0}
+      - {key: vkmark_score, label: vkmark score, precision: 0}
+      - {key: glmark2_score, label: glmark2-es2 score, precision: 0}
+      - {key: cpu_temp_idle_c, label: Package idle, unit: °C, precision: 1}
+      - {key: cpu_temp_post_c, label: Package after test, unit: °C, precision: 1}
+      - {key: throttle_event_count, label: Throttle events, precision: 0}
+
+  - key: full_load
+    title: Combined CPU + iGPU Load
+    metrics:
+      - {key: duration_s, label: Load duration, unit: s, precision: 0}
+      - {key: cpu_bogo_ops_per_s, label: CPU matrixprod under load, unit: bogo ops/s, precision: 0}
+      - {key: gpu_load_iterations, label: iGPU clpeak runs during load, precision: 0}
+      - {key: gpu_sp_gflops, label: iGPU FP32 at end of load window, unit: GFLOPS, precision: 1}
+      - {key: cpu_temp_idle_c, label: Package idle, unit: °C, precision: 1}
+      - {key: cpu_temp_peak_c, label: Package at end of load window, unit: °C, precision: 1}
+      - {key: cpu_temp_post_c, label: Package after test, unit: °C, precision: 1}
+      - {key: throttle_event_count, label: Throttle events, precision: 0}
+
+  - key: ssd
+    title: NVMe Storage
+    metrics:
+      - {key: drive_model, label: Drive}
+      - {key: firmware, label: Firmware}
+      - {key: wear_pct, label: Wear (percentage used), unit: '%', precision: 0}
+      - {key: data_written_tb, label: Data written, unit: TB, precision: 2}
+      - {key: power_on_hours, label: Power-on hours, unit: h, precision: 0}
+      - {key: seq_write_mib_s, label: Direct sequential write (128k), unit: MiB/s, precision: 1}
+      - {key: seq_write_iops, label: Direct sequential write IOPS, precision: 0}
+      - {key: fsync_write_iops, label: fsync random write IOPS (4k), precision: 0}
+      - {key: fsync_lat_avg_us, label: fsync latency avg, unit: µs, precision: 1}
+      - {key: fsync_lat_p99_us, label: fsync latency p99, unit: µs, precision: 1}
+      - {key: nvme_temp_idle_c, label: NVMe idle, unit: °C, precision: 1}
+      - {key: nvme_temp_post_c, label: NVMe after test, unit: °C, precision: 1}
+
+  - key: network
+    title: Network (iperf3 full mesh)
+    type: network

@@ -1,3 +1,4 @@
+---
 all:
   vars:
     bootstrap_user: kruse
@@ -11,15 +12,29 @@ all:
       - btop
       - wget
       - networkmanager
-      - iperf3
+      - mesa
+      - vulkan-intel
+      - vulkan-icd-loader
+      - intel-media-driver
+      - libva-intel-driver
+      - vulkan-tools
+      - clinfo
+      - intel-gpu-tools
+      - lm_sensors
+    # Benchmark-only tools are installed on demand by benchmark.yml
+    # (see playbooks/vars/benchmark.yml) and removed by base-teardown.yml.
     ca_valid_days: 3650
     leaf_valid_days: 200
     cert_organization: "Vogon Deep-Space Avian & DTN Transit Board (RFC 1149 / RFC 9171)"
-    cert_organizational_unit: "Office for Directing DTN Bundle Custody Transfers of WireGuard-over-BLE HID Service 0x1812 Page 0x20 (HUD) over hid-ebpf to the Outer Rim"
+    cert_organizational_unit: >-
+      Office for Directing DTN Bundle Custody Transfers of WireGuard-over-BLE HID Service 0x1812 Page 0x20 (HUD)
+      over hid-ebpf to the Outer Rim
     cert_root_ca_cn: "B.I.R.D. (BIRD Interstellar Recursive Defenestration) Root CA"
     elk_version: 9.5.6
 
-    es_heap_size_gb: "{{ [ [ ((ansible_facts['memtotal_mb'] | default(ram_gb * 1024 if ram_gb is defined else 4096)) / 2 / 1024) | round(0, 'floor') | int, 31 ] | min, 1 ] | max }}"
+    es_heap_size_gb: >-
+      {{ [[((ansible_facts['memtotal_mb'] | default(ram_gb * 1024 if ram_gb is defined else 4096)) / 2 / 1024)
+            | round(0, 'floor') | int, 31] | min, 1] | max }}
     kibana_memory_mb: 2048
 
   children:

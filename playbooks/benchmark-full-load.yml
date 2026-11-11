@@ -1,0 +1,189 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Benchmark combined CPU + iGPU parallel load and thermal behaviour
+  hosts: cluster_nodes
+  become: true
+  vars_files:
+    - vars/benchmark.yml
+  vars:
+    full_load_duration_s: 60
+    # stress-ng keeps running this long after the iGPU window so the peak sample is taken under full load
+    full_load_cpu_tail_s: 20
+    full_load_cpu_method: matrixprod
+    full_load_cpu_timeout_s: "{{ full_load_duration_s + full_load_cpu_tail_s }}"
+    full_load_cpu_unit: mikmakmuk-benchmark-stress-ng
+  environment:
+    MESA_LOADER_DRIVER_OVERRIDE: iris
+    LIBGL_ALWAYS_SOFTWARE: "0"
+    RUSTICL_ENABLE: iris
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Dependencies & Idle Baseline
+    # -------------------------------------------------------------------------
+    - name: Install stress, OpenCL load and sensor tooling
+      community.general.pacman:
+        name: "{{ benchmark_tool_packages.cpu + ['clpeak', 'lm_sensors'] }}"
+        state: present
+
+    - name: Read idle temperatures
+      ansible.builtin.import_tasks: tasks/read-sensors.yml
+
+    - name: Record idle temperatures
+      ansible.builtin.set_fact:
+        full_load_temps_idle: "{{ sensor_temps }}"
+
+    - name: Refresh node clock facts
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - date_time
+
+    - name: Record benchmark start time
+      ansible.builtin.set_fact:
+        full_load_start_epoch: "{{ ansible_facts['date_time']['epoch'] }}"
+
+    # -------------------------------------------------------------------------
+    # 2. Parallel CPU (stress-ng runtime unit) + iGPU (repeated clpeak runs) Load
+    # -------------------------------------------------------------------------
+    - name: Run parallel CPU and iGPU load
+      block:
+        - name: Create temporary stress-ng metrics file
+          ansible.builtin.tempfile:
+            state: file
+            suffix: .stress-ng.yaml
+          register: full_load_metrics_file
+
+        - name: Create temporary clpeak results file
+          ansible.builtin.tempfile:
+            state: file
+            suffix: .clpeak.json
+          register: full_load_clpeak_file
+
+        - name: Install runtime unit for the all-core stress-ng load
+          ansible.builtin.template:
+            src: "{{ project_root }}/templates/benchmark-stress-ng.service.j2"
+            dest: "/run/systemd/system/{{ full_load_cpu_unit }}.service"
+            owner: root
+            group: root
+            mode: "0644"
+          register: full_load_cpu_unit_file
+
+        - name: Start all-core stress-ng load in the background
+          ansible.builtin.systemd_service:
+            name: "{{ full_load_cpu_unit }}.service"
+            state: started
+            daemon_reload: true
+
+        - name: Record iGPU load window start
+          ansible.builtin.set_fact:
+            full_load_gpu_window_start: "{{ now().timestamp() | int }}"
+
+        - name: Keep the iGPU busy with back-to-back clpeak FP32 runs for the load window
+          ansible.builtin.command:
+            cmd: clpeak --opencl --single-precision-compute --output {{ full_load_clpeak_file.path }}
+          register: full_load_gpu_run
+          changed_when: false
+          until: (now().timestamp() | int) - (full_load_gpu_window_start | int) >= full_load_duration_s
+          retries: "{{ full_load_duration_s }}"
+          delay: 0
+
+        - name: Read temperatures at the end of the load window
+          ansible.builtin.import_tasks: tasks/read-sensors.yml
+
+        - name: Record end-of-window temperatures
+          ansible.builtin.set_fact:
+            full_load_temps_peak: "{{ sensor_temps }}"
+
+        - name: Read last clpeak result
+          ansible.builtin.slurp:
+            src: "{{ full_load_clpeak_file.path }}"
+          register: full_load_clpeak_raw
+
+        - name: Wait for stress-ng CPU load to finish
+          ansible.builtin.systemd_service:
+            name: "{{ full_load_cpu_unit }}.service"
+          register: full_load_cpu_status
+          until: full_load_cpu_status.status.ActiveState in ['inactive', 'failed']
+          retries: "{{ ((full_load_cpu_timeout_s | int + 120) / 5) | int }}"
+          delay: 5
+
+        - name: Verify stress-ng CPU load completed successfully
+          ansible.builtin.assert:
+            that:
+              - full_load_cpu_status.status.Result == 'success'
+            fail_msg: "stress-ng unit ended with result {{ full_load_cpu_status.status.Result }}"
+            quiet: true
+
+        - name: Read post-test temperatures
+          ansible.builtin.import_tasks: tasks/read-sensors.yml
+
+        - name: Read stress-ng metrics
+          ansible.builtin.slurp:
+            src: "{{ full_load_metrics_file.path }}"
+          register: full_load_metrics_raw
+
+      always:
+        - name: Stop all-core stress-ng load
+          ansible.builtin.systemd_service:
+            name: "{{ full_load_cpu_unit }}.service"
+            state: stopped
+          when: full_load_cpu_unit_file is succeeded
+
+        - name: Remove runtime unit for the all-core stress-ng load
+          ansible.builtin.file:
+            path: "/run/systemd/system/{{ full_load_cpu_unit }}.service"
+            state: absent
+          notify: Reload systemd
+
+        - name: Remove temporary stress-ng and clpeak result files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ [full_load_metrics_file.path | default(''), full_load_clpeak_file.path | default('')] | select }}"
+
+    # -------------------------------------------------------------------------
+    # 3. Throttling Audit, Compile & Save Results
+    # -------------------------------------------------------------------------
+    - name: Collect throttling events logged during the benchmark
+      ansible.builtin.import_tasks: tasks/kernel-throttle-events.yml
+      vars:
+        throttle_since_epoch: "{{ full_load_start_epoch }}"
+
+    - name: Parse load metrics
+      ansible.builtin.set_fact:
+        full_load_cpu_metrics: >-
+          {{ (full_load_metrics_raw.content | b64decode | from_yaml).metrics
+              | selectattr('stressor', 'equalto', 'cpu') | first }}
+        full_load_gpu_sp: >-
+          {{ (full_load_clpeak_raw.content | b64decode | from_json).devices
+              | selectattr('backend', 'equalto', 'OpenCL') | map(attribute='tests') | flatten
+              | selectattr('id', 'equalto', 'single_precision_compute')
+              | map(attribute='metrics') | flatten | map(attribute='value') | map('float') | list }}
+
+    - name: Compile combined load benchmark result
+      ansible.builtin.set_fact:
+        full_load_result:
+          duration_s: "{{ full_load_duration_s }}"
+          cpu_method: "{{ full_load_cpu_method }}"
+          cpu_bogo_ops_per_s: "{{ full_load_cpu_metrics['bogo-ops-per-second-real-time'] | round(1) }}"
+          gpu_load_iterations: "{{ full_load_gpu_run.attempts }}"
+          gpu_sp_gflops: "{{ ((full_load_gpu_sp | max) / 1e9) | round(1) if full_load_gpu_sp else none }}"
+          cpu_temp_idle_c: "{{ full_load_temps_idle.cpu_package_c }}"
+          cpu_temp_peak_c: "{{ full_load_temps_peak.cpu_package_c }}"
+          cpu_temp_post_c: "{{ sensor_temps.cpu_package_c }}"
+          nvme_temp_idle_c: "{{ full_load_temps_idle.nvme_c }}"
+          nvme_temp_post_c: "{{ sensor_temps.nvme_c }}"
+          throttle_event_count: "{{ throttle_events | length }}"
+          throttle_events: "{{ throttle_events[-5:] }}"
+
+    - name: Save combined load benchmark result
+      ansible.builtin.import_tasks: tasks/save-benchmark-result.yml
+      vars:
+        benchmark_name: full_load
+        benchmark_result: "{{ full_load_result }}"
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true

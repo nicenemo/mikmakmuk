@@ -1,112 +1,61 @@
-#!/usr/bin/ansible-playbook
+#!/usr/bin/env ansible-playbook
 ---
 - name: Extract Diagnostics and Logs from All Servers
   hosts: all
-  gather_facts: no
+  gather_facts: false
   vars:
     ansible_user: kruse
     local_log_dir: "/tmp/logs_{{ inventory_hostname }}"
+    log_commands:
+      - {file: dmesg_warn.log, argv: [dmesg, -T, '--level=emerg,alert,crit,err,warn']}
+      - {file: dmesg_full.log, argv: [dmesg, -T]}
+      - {file: journal_current_boot.log, argv: [journalctl, --boot=0, --no-pager]}
+      - {file: ssh_auth.log, argv: [journalctl, --unit=sshd.service, --boot=0, --no-pager]}
+      - {file: sensors.log, argv: [sensors]}
+      - {file: shutdown_history.log, argv: [last, -x, shutdown, reboot]}
+      - {file: memory.log, argv: [free, -h]}
 
   tasks:
+    # -------------------------------------------------------------------------
+    # 1. Collect Diagnostics
+    # -------------------------------------------------------------------------
+    - name: List boots recorded in the journal
+      ansible.builtin.command:
+        argv: [journalctl, --list-boots, --output=json]
+      register: journal_boots
+      changed_when: false
+
+    - name: Collect kernel, journal, SSH and hardware diagnostics
+      ansible.builtin.command:
+        argv: "{{ item.argv }}"
+      loop: "{{ log_commands + previous_boot_log }}"
+      loop_control:
+        label: "{{ item.file }}"
+      vars:
+        previous_boot_log: >-
+          {{ [{'file': 'journal_previous_boot.log', 'argv': ['journalctl', '--boot=-1', '--no-pager']}]
+              if journal_boots.stdout | from_json | length > 1 else [] }}
+      register: diagnostics
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 2. Store Logs on the Controller
+    # -------------------------------------------------------------------------
     - name: Ensure host-specific local log directory exists
       ansible.builtin.file:
         path: "{{ local_log_dir }}"
         state: directory
+        mode: "0755"
       delegate_to: localhost
-      become: no
+      become: false
 
-    - name: Fetch recent kernel dmesg log
-      ansible.builtin.shell:
-        cmd: "dmesg -T --level=emerg,alert,crit,err,warn > /tmp/dmesg_warn.log && dmesg -T > /tmp/dmesg_full.log"
-      register: result
-      until: result.rc == 0
-      retries: 3
-      delay: 5
-      ignore_errors: yes
-
-    - name: Fetch persistent systemd journal logs (current and previous boots)
-      ansible.builtin.shell:
-        cmd: |
-          journalctl -b 0 -e --no-pager > /tmp/journal_current_boot.log
-          journalctl -b -1 -e --no-pager > /tmp/journal_previous_boot.log 2>/dev/null || true
-      register: result
-      until: result.rc == 0
-      retries: 3
-      delay: 5
-      ignore_errors: yes
-
-    - name: Fetch SSH daemon and authentication logs
-      ansible.builtin.shell:
-        cmd: |
-          {
-            echo "=== SSH Service Journal Entries (Current Boot) ==="
-            journalctl -u ssh -u sshd -u sshd.service -b 0 --no-pager 2>/dev/null
-            echo "=== Auth / Secure Logs (Last 500 Lines) ==="
-            tail -n 500 /var/log/auth.log 2>/dev/null || tail -n 500 /var/log/secure 2>/dev/null || true
-          } > /tmp/ssh_auth.log
-      register: result
-      until: result.rc == 0
-      retries: 3
-      delay: 5
-      ignore_errors: yes
-
-    - name: Fetch hardware and thermal information
-      ansible.builtin.shell:
-        cmd: |
-          {
-            echo "=== CPU & Thermal Stats ==="
-            sensors 2>/dev/null || cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null
-            echo "=== Last Boot Logs / Shutdown Reasons ==="
-            last -x shutdown reboot 2>/dev/null
-            echo "=== Memory Info ==="
-            free -h
-          } > /tmp/hardware_info.log
-      register: result
-      until: result.rc == 0
-      retries: 3
-      delay: 5
-      ignore_errors: yes
-
-    - name: Set permissions on generated log files
-      ansible.builtin.file:
-        path: "{{ item }}"
-        mode: '0644'
-      loop:
-        - /tmp/dmesg_warn.log
-        - /tmp/dmesg_full.log
-        - /tmp/journal_current_boot.log
-        - /tmp/journal_previous_boot.log
-        - /tmp/ssh_auth.log
-        - /tmp/hardware_info.log
-      ignore_errors: yes
-
-    - name: Pull logs back to local machine
-      ansible.builtin.fetch:
-        src: "{{ item }}"
-        dest: "{{ local_log_dir }}/"
-        flat: yes
-      loop:
-        - /tmp/dmesg_warn.log
-        - /tmp/dmesg_full.log
-        - /tmp/journal_current_boot.log
-        - /tmp/journal_previous_boot.log
-        - /tmp/ssh_auth.log
-        - /tmp/hardware_info.log
-      register: fetch_result
-      until: fetch_result is not failed
-      retries: 3
-      delay: 5
-      become: no
-
-    - name: Clean up temporary files on host
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /tmp/dmesg_warn.log
-        - /tmp/dmesg_full.log
-        - /tmp/journal_current_boot.log
-        - /tmp/journal_previous_boot.log
-        - /tmp/ssh_auth.log
-        - /tmp/hardware_info.log
-      ignore_errors: yes
+    - name: Write diagnostics to the local log directory
+      ansible.builtin.copy:
+        content: "{{ item.stdout }}\n"
+        dest: "{{ local_log_dir }}/{{ item.item.file }}"
+        mode: "0644"
+      loop: "{{ diagnostics.results }}"
+      loop_control:
+        label: "{{ local_log_dir }}/{{ item.item.file }}"
+      delegate_to: localhost
+      become: false
