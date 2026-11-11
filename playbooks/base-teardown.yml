@@ -1,9 +1,16 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: Revert Base System Optimizations and Configuration
+- name: Revert Base System Packages and Environment Configuration
   hosts: cluster_nodes
   become: true
+  vars_files:
+    - vars/benchmark.yml
   vars:
+    # Recorded by base-setup.yml; nodes provisioned by older versions fall back
+    # to removing every inventory package.
+    base_installed_packages: >-
+      {{ ansible_local['mikmakmuk_base']['installed_packages']
+          | default((common_packages | default([])) + (node_packages | default([]))) }}
     protected_packages:
       # Network & Connectivity Preservation
       - networkmanager
@@ -23,14 +30,49 @@
 
   tasks:
     # -------------------------------------------------------------------------
-    # 1. Clean Environment Drop-ins & User Packages Safely
+    # 1. Clean Environment Drop-ins & Packages Safely
     # -------------------------------------------------------------------------
-    - name: Remove baseline iGPU DRI environment drop-in file
+    - name: Remove iGPU DRI environment drop-in file
       ansible.builtin.file:
         path: /etc/environment.d/99-homelab-igpu-dri.conf
         state: absent
 
-    - name: Remove common_packages and node_packages (excluding protected system packages)
+    - name: Remove packages installed by setup and benchmarks (excluding protected system packages)
       community.general.pacman:
-        name: "{{ ((common_packages | default([])) + (node_packages | default([]))) | difference(protected_packages) }}"
+        name: >-
+          {{ (base_installed_packages + (benchmark_tool_packages.values() | flatten))
+              | unique | difference(protected_packages) }}
         state: absent
+        # Skip packages that other installed software now depends on (e.g. KDE's kinfocenter needs clinfo).
+        extra_args: --unneeded
+
+    # -------------------------------------------------------------------------
+    # 2. Remove Recorded State (base-teardown runs last in teardown.yml)
+    # -------------------------------------------------------------------------
+    - name: Remove recorded base state
+      ansible.builtin.file:
+        path: /etc/ansible/facts.d/mikmakmuk_base.fact
+        state: absent
+
+    - name: Check for Ansible configuration directory
+      ansible.builtin.stat:
+        path: /etc/ansible
+      register: ansible_etc_dir
+
+    - name: Find remaining Ansible local facts and configuration
+      ansible.builtin.find:
+        paths: /etc/ansible
+        file_type: any
+        recurse: true
+      register: ansible_local_leftovers
+      when: ansible_etc_dir.stat.exists
+
+    - name: Remove Ansible configuration directory when only an empty facts.d remains
+      ansible.builtin.file:
+        path: /etc/ansible
+        state: absent
+      when:
+        - ansible_etc_dir.stat.exists
+        - >-
+          ansible_local_leftovers.files | map(attribute='path')
+          | reject('equalto', '/etc/ansible/facts.d') | list | length == 0

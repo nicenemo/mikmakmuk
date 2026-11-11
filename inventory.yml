@@ -1,3 +1,4 @@
+---
 all:
   vars:
     bootstrap_user: kruse
@@ -11,7 +12,6 @@ all:
       - btop
       - wget
       - networkmanager
-      - iperf3
       - mesa
       - vulkan-intel
       - vulkan-icd-loader
@@ -21,25 +21,22 @@ all:
       - clinfo
       - intel-gpu-tools
       - lm_sensors
-      - stress-ng
-      - sysbench
-      - weston
-      - glmark2
-      - vkmark
+    # Benchmark-only tools are installed on demand by benchmark.yml
+    # (see playbooks/vars/benchmark.yml) and removed by base-teardown.yml.
 
   children:
     cluster_nodes:
       hosts:
-#        mik:
-#          ansible_host: 192.168.105.2
-#          ram_gb: 32
-#          cpu_type: 8500
-#          cluster_ip: 192.168.107.2
-#          btrfs_mount_opts: "noatime,compress-force=zstd:1,space_cache=v2"
-#          node_packages:
-#            - rsync
-#            - tree
-#            - tmux
+        mik:
+          ansible_host: 192.168.105.2
+          ram_gb: 32
+          cpu_type: 8500
+          cluster_ip: 192.168.107.2
+          btrfs_mount_opts: "noatime,compress-force=zstd:1,space_cache=v2"
+          node_packages:
+            - rsync
+            - tree
+            - tmux
 
         mak:
           ansible_host: 192.168.105.3
@@ -51,12 +48,12 @@ all:
             - htop
             - ncdu
 
-#        muk:
-#          ansible_host: 192.168.105.4
-#          ram_gb: 64
-#          cpu_type: 8500T
-#          cluster_ip: 192.168.107.4
-#          btrfs_mount_opts: "noatime,compress=zstd:3,space_cache=v2"
-#          node_packages:
-#            - iotop
-#            - duf
+        muk:
+          ansible_host: 192.168.105.4
+          ram_gb: 64
+          cpu_type: 8500T
+          cluster_ip: 192.168.107.4
+          btrfs_mount_opts: "noatime,compress=zstd:3,space_cache=v2"
+          node_packages:
+            - iotop
+            - duf

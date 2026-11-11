@@ -1,0 +1,16 @@
+---
+# Collects kernel log lines matching `benchmark_throttle_pattern` that were
+# logged since `throttle_since_epoch` and sets `throttle_events` (list of lines).
+- name: Read kernel log since benchmark start
+  ansible.builtin.command:
+    cmd: "journalctl --dmesg --output=short-iso --no-pager --quiet --since=@{{ throttle_since_epoch }}"
+  register: kernel_log_raw
+  changed_when: false
+
+- name: Filter kernel log for thermal and power throttling events
+  ansible.builtin.set_fact:
+    throttle_events: >-
+      {{ kernel_log_raw.stdout_lines
+          | select('search', benchmark_throttle_pattern, ignorecase=true)
+          | reject('search', 'UFW (BLOCK|ALLOW)')
+          | list }}

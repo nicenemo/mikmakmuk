@@ -333,6 +333,492 @@
         </table>
       </section>
 
+      <!-- BEGIN BENCHMARK RESULTS (managed by playbooks/benchmark-update-index.yml) -->
+      <section id="benchmarks">
+        <h2>Benchmark Results</h2>
+        <p>
+          Measured with <code>./benchmark.yml</code> on bare-metal CachyOS. Last update:
+          2026-11-11T21:36:17Z.
+        </p>
+        <!-- One card per row: the per-node tables need the full content width. -->
+        <div style="display: grid; gap: 1rem;">
+          <div class="card" style="min-width: 0;">
+            <h3>Hardware &amp; Power Audit</h3>
+            <p style="font-size: 0.8rem; margin-bottom: 0;">Collected 2026-11-11T21:21:29Z</p>
+            <div style="overflow-x: auto;">
+            <table class="hardware-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>mik</th>
+                  <th>mak</th>
+                  <th>muk</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>CPU model</td>
+                  <td>Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz</td>
+                  <td>Intel(R) Core(TM) i5-8500T CPU @ 2.10GHz</td>
+                  <td>Intel(R) Core(TM) i5-8500T CPU @ 2.10GHz</td>
+                </tr>
+                <tr>
+                  <td>Kernel</td>
+                  <td>7.3.3-1-cachyos</td>
+                  <td>7.3.3-1-cachyos</td>
+                  <td>7.3.3-1-cachyos</td>
+                </tr>
+                <tr>
+                  <td>Microcode</td>
+                  <td>0xfa</td>
+                  <td>0xfa</td>
+                  <td>0xfa</td>
+                </tr>
+                <tr>
+                  <td>Scaling driver</td>
+                  <td>intel_pstate</td>
+                  <td>intel_pstate</td>
+                  <td>intel_pstate</td>
+                </tr>
+                <tr>
+                  <td>Governor</td>
+                  <td>performance</td>
+                  <td>performance</td>
+                  <td>performance</td>
+                </tr>
+                <tr>
+                  <td>EPP</td>
+                  <td>performance</td>
+                  <td>performance</td>
+                  <td>performance</td>
+                </tr>
+                <tr>
+                  <td>Turbo boost</td>
+                  <td>yes</td>
+                  <td>yes</td>
+                  <td>yes</td>
+                </tr>
+                <tr>
+                  <td>CPU max clock</td>
+                  <td>4100 MHz</td>
+                  <td>3500 MHz</td>
+                  <td>3500 MHz</td>
+                </tr>
+                <tr>
+                  <td>Installed memory</td>
+                  <td>31.1 GiB</td>
+                  <td>62.6 GiB</td>
+                  <td>62.6 GiB</td>
+                </tr>
+                <tr>
+                  <td>Populated SO-DIMMs</td>
+                  <td>2</td>
+                  <td>2</td>
+                  <td>2</td>
+                </tr>
+                <tr>
+                  <td>Memory speed</td>
+                  <td>2400 MT/s</td>
+                  <td>2667 MT/s</td>
+                  <td>2667 MT/s</td>
+                </tr>
+                <tr>
+                  <td>iGPU driver</td>
+                  <td>i915</td>
+                  <td>i915</td>
+                  <td>i915</td>
+                </tr>
+                <tr>
+                  <td>iGPU max clock</td>
+                  <td>n/a</td>
+                  <td>1100 MHz</td>
+                  <td>1100 MHz</td>
+                </tr>
+                <tr>
+                  <td>VT-x</td>
+                  <td>yes</td>
+                  <td>yes</td>
+                  <td>yes</td>
+                </tr>
+                <tr>
+                  <td>IOMMU (VT-d)</td>
+                  <td>no</td>
+                  <td>no</td>
+                  <td>no</td>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+          <div class="card" style="min-width: 0;">
+            <h3>CPU &amp; Memory</h3>
+            <p style="font-size: 0.8rem; margin-bottom: 0;">Collected 2026-11-11T21:26:20Z</p>
+            <div style="overflow-x: auto;">
+            <table class="hardware-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>mik</th>
+                  <th>mak</th>
+                  <th>muk</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Sysbench single-thread</td>
+                  <td>486.2 events/s</td>
+                  <td>398.8 events/s</td>
+                  <td>398.9 events/s</td>
+                </tr>
+                <tr>
+                  <td>Sysbench multi-thread</td>
+                  <td>2917.3 events/s</td>
+                  <td>2393.6 events/s</td>
+                  <td>2393.5 events/s</td>
+                </tr>
+                <tr>
+                  <td>stress-ng matrixprod (60 s)</td>
+                  <td>9431 bogo ops/s</td>
+                  <td>7636 bogo ops/s</td>
+                  <td>7855 bogo ops/s</td>
+                </tr>
+                <tr>
+                  <td>Memory sequential read</td>
+                  <td>36057 MiB/s</td>
+                  <td>30147 MiB/s</td>
+                  <td>29477 MiB/s</td>
+                </tr>
+                <tr>
+                  <td>Memory sequential write</td>
+                  <td>13537 MiB/s</td>
+                  <td>10688 MiB/s</td>
+                  <td>10750 MiB/s</td>
+                </tr>
+                <tr>
+                  <td>CPU package idle</td>
+                  <td>79.0 °C</td>
+                  <td>64.0 °C</td>
+                  <td>67.0 °C</td>
+                </tr>
+                <tr>
+                  <td>CPU package after test</td>
+                  <td>84.0 °C</td>
+                  <td>70.0 °C</td>
+                  <td>71.0 °C</td>
+                </tr>
+                <tr>
+                  <td>Throttle events</td>
+                  <td>0</td>
+                  <td>0</td>
+                  <td>0</td>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+          <div class="card" style="min-width: 0;">
+            <h3>Integrated GPU (UHD 630)</h3>
+            <p style="font-size: 0.8rem; margin-bottom: 0;">Collected 2026-11-11T21:34:40Z</p>
+            <div style="overflow-x: auto;">
+            <table class="hardware-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>mik</th>
+                  <th>mak</th>
+                  <th>muk</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>GPU</td>
+                  <td>Intel(R) UHD Graphics 630 (CFL GT2)</td>
+                  <td>Intel(R) UHD Graphics 630 (CFL GT2)</td>
+                  <td>Intel(R) UHD Graphics 630 (CFL GT2)</td>
+                </tr>
+                <tr>
+                  <td>OpenCL compute units</td>
+                  <td>3</td>
+                  <td>3</td>
+                  <td>3</td>
+                </tr>
+                <tr>
+                  <td>Max clock</td>
+                  <td>1100 MHz</td>
+                  <td>1100 MHz</td>
+                  <td>1100 MHz</td>
+                </tr>
+                <tr>
+                  <td>OpenCL FP32 peak</td>
+                  <td>405.2 GFLOPS</td>
+                  <td>334.6 GFLOPS</td>
+                  <td>316.0 GFLOPS</td>
+                </tr>
+                <tr>
+                  <td>Vulkan FP32 peak</td>
+                  <td>412.1 GFLOPS</td>
+                  <td>340.4 GFLOPS</td>
+                  <td>321.6 GFLOPS</td>
+                </tr>
+                <tr>
+                  <td>OpenCL memory bandwidth</td>
+                  <td>30.2 GB/s</td>
+                  <td>32.7 GB/s</td>
+                  <td>32.0 GB/s</td>
+                </tr>
+                <tr>
+                  <td>Vulkan memory bandwidth</td>
+                  <td>30.0 GB/s</td>
+                  <td>33.0 GB/s</td>
+                  <td>31.9 GB/s</td>
+                </tr>
+                <tr>
+                  <td>VA-API profiles</td>
+                  <td>32</td>
+                  <td>32</td>
+                  <td>32</td>
+                </tr>
+                <tr>
+                  <td>vkmark score</td>
+                  <td>7617</td>
+                  <td>5976</td>
+                  <td>5908</td>
+                </tr>
+                <tr>
+                  <td>glmark2-es2 score</td>
+                  <td>5049</td>
+                  <td>3771</td>
+                  <td>3617</td>
+                </tr>
+                <tr>
+                  <td>Package idle</td>
+                  <td>83.0 °C</td>
+                  <td>72.0 °C</td>
+                  <td>71.0 °C</td>
+                </tr>
+                <tr>
+                  <td>Package after test</td>
+                  <td>79.0 °C</td>
+                  <td>65.0 °C</td>
+                  <td>66.0 °C</td>
+                </tr>
+                <tr>
+                  <td>Throttle events</td>
+                  <td>0</td>
+                  <td>0</td>
+                  <td>0</td>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+          <div class="card" style="min-width: 0;">
+            <h3>Combined CPU + iGPU Load</h3>
+            <p style="font-size: 0.8rem; margin-bottom: 0;">Collected 2026-11-11T21:36:17Z</p>
+            <div style="overflow-x: auto;">
+            <table class="hardware-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>mik</th>
+                  <th>mak</th>
+                  <th>muk</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Load duration</td>
+                  <td>60 s</td>
+                  <td>60 s</td>
+                  <td>60 s</td>
+                </tr>
+                <tr>
+                  <td>CPU matrixprod under load</td>
+                  <td>8124 bogo ops/s</td>
+                  <td>7327 bogo ops/s</td>
+                  <td>7414 bogo ops/s</td>
+                </tr>
+                <tr>
+                  <td>iGPU clpeak runs during load</td>
+                  <td>5</td>
+                  <td>5</td>
+                  <td>5</td>
+                </tr>
+                <tr>
+                  <td>iGPU FP32 at end of load window</td>
+                  <td>403.5 GFLOPS</td>
+                  <td>311.1 GFLOPS</td>
+                  <td>313.6 GFLOPS</td>
+                </tr>
+                <tr>
+                  <td>Package idle</td>
+                  <td>80.0 °C</td>
+                  <td>66.0 °C</td>
+                  <td>69.0 °C</td>
+                </tr>
+                <tr>
+                  <td>Package at end of load window</td>
+                  <td>95.0 °C</td>
+                  <td>74.0 °C</td>
+                  <td>74.0 °C</td>
+                </tr>
+                <tr>
+                  <td>Package after test</td>
+                  <td>90.0 °C</td>
+                  <td>71.0 °C</td>
+                  <td>71.0 °C</td>
+                </tr>
+                <tr>
+                  <td>Throttle events</td>
+                  <td>0</td>
+                  <td>0</td>
+                  <td>0</td>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+          <div class="card" style="min-width: 0;">
+            <h3>NVMe Storage</h3>
+            <p style="font-size: 0.8rem; margin-bottom: 0;">Collected 2026-11-11T21:24:34Z</p>
+            <div style="overflow-x: auto;">
+            <table class="hardware-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>mik</th>
+                  <th>mak</th>
+                  <th>muk</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Drive</td>
+                  <td>WDC WDS500G2B0C-00PXH0</td>
+                  <td>Samsung SSD 980 PRO 1TB</td>
+                  <td>KINGSTON SNVS1000G</td>
+                </tr>
+                <tr>
+                  <td>Firmware</td>
+                  <td>211210WD</td>
+                  <td>5B2QGXA7</td>
+                  <td>S8B40103</td>
+                </tr>
+                <tr>
+                  <td>Wear (percentage used)</td>
+                  <td>0 %</td>
+                  <td>0 %</td>
+                  <td>1 %</td>
+                </tr>
+                <tr>
+                  <td>Data written</td>
+                  <td>3.59 TB</td>
+                  <td>6.92 TB</td>
+                  <td>1.23 TB</td>
+                </tr>
+                <tr>
+                  <td>Power-on hours</td>
+                  <td>254 h</td>
+                  <td>129 h</td>
+                  <td>6520 h</td>
+                </tr>
+                <tr>
+                  <td>Direct sequential write (128k)</td>
+                  <td>662.7 MiB/s</td>
+                  <td>2630.0 MiB/s</td>
+                  <td>129.6 MiB/s</td>
+                </tr>
+                <tr>
+                  <td>Direct sequential write IOPS</td>
+                  <td>5302</td>
+                  <td>21040</td>
+                  <td>1037</td>
+                </tr>
+                <tr>
+                  <td>fsync random write IOPS (4k)</td>
+                  <td>960</td>
+                  <td>162</td>
+                  <td>276</td>
+                </tr>
+                <tr>
+                  <td>fsync latency avg</td>
+                  <td>17.4 µs</td>
+                  <td>21.6 µs</td>
+                  <td>19.7 µs</td>
+                </tr>
+                <tr>
+                  <td>fsync latency p99</td>
+                  <td>20.4 µs</td>
+                  <td>24.4 µs</td>
+                  <td>21.6 µs</td>
+                </tr>
+                <tr>
+                  <td>NVMe idle</td>
+                  <td>55.9 °C</td>
+                  <td>52.9 °C</td>
+                  <td>44.9 °C</td>
+                </tr>
+                <tr>
+                  <td>NVMe after test</td>
+                  <td>62.9 °C</td>
+                  <td>60.9 °C</td>
+                  <td>60.9 °C</td>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+          <div class="card" style="min-width: 0;">
+            <h3>Network (iperf3 full mesh)</h3>
+            <p style="font-size: 0.8rem; margin-bottom: 0;">Collected 2026-11-11T21:23:47Z</p>
+            <div style="overflow-x: auto;">
+            <table class="hardware-table">
+              <thead>
+                <tr>
+                  <th>Path</th>
+                  <th>1 GbE</th>
+                  <th>2.5 GbE</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>mik</code> &rarr; <code>mak</code></td>
+                  <td>0.93 Gbps</td>
+                  <td>2.47 Gbps</td>
+                </tr>
+                <tr>
+                  <td><code>mik</code> &rarr; <code>muk</code></td>
+                  <td>0.93 Gbps</td>
+                  <td>2.47 Gbps</td>
+                </tr>
+                <tr>
+                  <td><code>mak</code> &rarr; <code>mik</code></td>
+                  <td>0.93 Gbps</td>
+                  <td>2.47 Gbps</td>
+                </tr>
+                <tr>
+                  <td><code>mak</code> &rarr; <code>muk</code></td>
+                  <td>0.93 Gbps</td>
+                  <td>2.47 Gbps</td>
+                </tr>
+                <tr>
+                  <td><code>muk</code> &rarr; <code>mik</code></td>
+                  <td>0.94 Gbps</td>
+                  <td>2.47 Gbps</td>
+                </tr>
+                <tr>
+                  <td><code>muk</code> &rarr; <code>mak</code></td>
+                  <td>0.94 Gbps</td>
+                  <td>2.47 Gbps</td>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- END BENCHMARK RESULTS (managed by playbooks/benchmark-update-index.yml) -->
+
       <!-- UNORTHODOX ENGINEERING & DESIGN CHOICES -->
       <section>
         <h2>Design Choices</h2>

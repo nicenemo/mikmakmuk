@@ -1,0 +1,134 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Audit CPU, power management, memory, iGPU and virtualization state
+  hosts: cluster_nodes
+  become: true
+  vars_files:
+    - vars/benchmark.yml
+  vars:
+    hw_sysfs_paths:
+      scaling_driver: /sys/devices/system/cpu/cpu0/cpufreq/scaling_driver
+      scaling_governor: /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+      energy_performance_preference: /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference
+      no_turbo: /sys/devices/system/cpu/intel_pstate/no_turbo
+      cpuinfo_min_freq: /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq
+      cpuinfo_max_freq: /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq
+      scaling_cur_freq: /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq
+      igpu_act_mhz: /sys/class/drm/card0/gt_act_freq_mhz
+      igpu_max_mhz: /sys/class/drm/card0/gt_max_freq_mhz
+      nr_hugepages: /proc/sys/vm/nr_hugepages
+      cpuinfo: /proc/cpuinfo
+      modules: /proc/modules
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Diagnostic Tools
+    # -------------------------------------------------------------------------
+    - name: Ensure hardware diagnostic tools are installed
+      community.general.pacman:
+        name:
+          - dmidecode
+          - pciutils
+        state: present
+
+    # -------------------------------------------------------------------------
+    # 2. Query CPU, Power, iGPU & Kernel State
+    # -------------------------------------------------------------------------
+    - name: Query CPU topology as JSON
+      ansible.builtin.command:
+        cmd: lscpu --json
+      register: hw_lscpu_raw
+      changed_when: false
+
+    - name: Check which CPU, power management and iGPU sysfs/procfs nodes exist
+      ansible.builtin.stat:
+        path: "{{ item.value }}"
+        get_checksum: false
+      loop: "{{ hw_sysfs_paths | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: hw_sysfs_stat
+
+    # Missing nodes (e.g. no intel_pstate) are reported as null in the result.
+    - name: Read existing CPU, power management and iGPU sysfs/procfs values
+      ansible.builtin.slurp:
+        src: "{{ item.item.value }}"
+      loop: "{{ hw_sysfs_stat.results | selectattr('stat.exists') | list }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+      register: hw_sysfs_raw
+
+    - name: Detect active IOMMU (VT-d) groups
+      ansible.builtin.find:
+        paths: /sys/class/iommu
+        file_type: any
+      register: hw_iommu_raw
+
+    - name: Query SMBIOS memory device information
+      ansible.builtin.command:
+        cmd: dmidecode --type memory
+      register: hw_dmi_memory_raw
+      changed_when: false
+
+    - name: Query VGA controller kernel driver
+      ansible.builtin.command:
+        cmd: lspci -k -d ::0300
+      register: hw_lspci_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 3. Compile & Save Results
+    # -------------------------------------------------------------------------
+    - name: Decode sysfs/procfs values
+      ansible.builtin.set_fact:
+        hw_lscpu: "{{ (hw_lscpu_raw.stdout | from_json).lscpu | items2dict(key_name='field', value_name='data') }}"
+        hw_sysfs: >-
+          {{ dict(hw_sysfs_raw.results | map(attribute='item.item.key')
+              | zip(hw_sysfs_raw.results | map(attribute='content') | map('b64decode') | map('trim'))) }}
+
+    - name: Compile hardware audit result
+      ansible.builtin.set_fact:
+        hw_result:
+          cpu_model: "{{ hw_lscpu['Model name:'] | default(none) }}"
+          logical_cpus: "{{ ansible_facts['processor_vcpus'] }}"
+          kernel: "{{ ansible_facts['kernel'] }}"
+          microcode: >-
+            {{ hw_sysfs['cpuinfo'] | default('') | regex_findall('(?m)^microcode\s*:\s*(\S+)')
+                | first | default(none) }}
+          vtx_enabled: "{{ hw_sysfs['cpuinfo'] | default('') is search('\\bvmx\\b') }}"
+          iommu_enabled: "{{ hw_iommu_raw.matched > 0 }}"
+          scaling_driver: "{{ hw_sysfs['scaling_driver'] | default(none) }}"
+          scaling_governor: "{{ hw_sysfs['scaling_governor'] | default(none) }}"
+          energy_performance_preference: "{{ hw_sysfs['energy_performance_preference'] | default(none) }}"
+          turbo_enabled: "{{ (hw_sysfs['no_turbo'] == '0') if 'no_turbo' in hw_sysfs else none }}"
+          cpu_min_mhz: "{{ (hw_sysfs['cpuinfo_min_freq'] | int // 1000) if 'cpuinfo_min_freq' in hw_sysfs else none }}"
+          cpu_max_mhz: "{{ (hw_sysfs['cpuinfo_max_freq'] | int // 1000) if 'cpuinfo_max_freq' in hw_sysfs else none }}"
+          cpu_cur_mhz: "{{ (hw_sysfs['scaling_cur_freq'] | int // 1000) if 'scaling_cur_freq' in hw_sysfs else none }}"
+          memory_total_gib: "{{ (ansible_facts['memtotal_mb'] / 1024) | round(1) }}"
+          memory_dimms: >-
+            {{ hw_dmi_memory_raw.stdout | regex_findall('(?m)^\s+Size: \d+ [MGT]i?B') | length }}
+          memory_configured_mts: >-
+            {{ hw_dmi_memory_raw.stdout | regex_findall('(?m)^\s+Configured Memory Speed: (\d+) MT/s')
+                | map('int') | first | default(none) }}
+          memory_rated_mts: >-
+            {{ hw_dmi_memory_raw.stdout | regex_findall('(?m)^\s+Speed: (\d+) MT/s')
+                | map('int') | first | default(none) }}
+          memory_voltage_v: >-
+            {{ hw_dmi_memory_raw.stdout | regex_findall('(?m)^\s+Configured Voltage: ([0-9.]+) V')
+                | map('float') | first | default(none) }}
+          memory_part_numbers: >-
+            {{ hw_dmi_memory_raw.stdout | regex_findall('(?m)^\s+Part Number: (\S.*?)\s*$')
+                | reject('match', '^(Unknown|Not Specified)$') | list }}
+          igpu_driver: >-
+            {{ hw_lspci_raw.stdout | regex_findall('Kernel driver in use: (\S+)') | first | default(none) }}
+          igpu_act_mhz: "{{ hw_sysfs['igpu_act_mhz'] | int if 'igpu_act_mhz' in hw_sysfs else none }}"
+          igpu_max_mhz: "{{ hw_sysfs['igpu_max_mhz'] | int if 'igpu_max_mhz' in hw_sysfs else none }}"
+          kvm_modules: >-
+            {{ hw_sysfs['modules'] | default('') | regex_findall('(?m)^(kvm\w*) ') }}
+          hugepages: "{{ hw_sysfs['nr_hugepages'] | int if 'nr_hugepages' in hw_sysfs else none }}"
+
+    - name: Save hardware audit result
+      ansible.builtin.import_tasks: tasks/save-benchmark-result.yml
+      vars:
+        benchmark_name: hardware
+        benchmark_result: "{{ hw_result }}"

@@ -1,0 +1,13 @@
+# Transient headless Weston compositor for playbooks/benchmark-igpu.yml (lives in /run, gone after reboot).
+[Unit]
+Description=Headless Weston compositor for Mik Mak Muk iGPU benchmarks
+
+[Service]
+Type=simple
+RuntimeDirectory={{ igpu_weston_unit }}
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR={{ igpu_wayland_env['XDG_RUNTIME_DIR'] }}
+{% for name, value in igpu_gpu_env.items() %}
+Environment={{ name }}={{ value }}
+{% endfor %}
+ExecStart=/usr/bin/weston --backend=headless --renderer=gl --socket={{ igpu_wayland_env['WAYLAND_DISPLAY'] }}

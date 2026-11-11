@@ -1,47 +1,63 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: "Cluster Storage TRIM Teardown & Maintenance Disable"
+- name: "Cluster Storage TRIM Teardown & Restore Original Timer State"
   hosts: cluster_nodes
   become: true
   vars:
-    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
+    project_root: "{{ playbook_dir | dirname }}"
+    # Recorded by trim-setup.yml; without it the timer is stopped and disabled.
+    trim_state: "{{ ansible_local['mikmakmuk_trim'] | default({}) }}"
+    restore_timer_enabled: "{{ trim_state['timer_enabled'] | default(false) | bool }}"
+    restore_timer_active: "{{ trim_state['timer_active'] | default(false) | bool }}"
 
   tasks:
     # -------------------------------------------------------------------------
-    # 1. Stop and Disable Automated Maintenance Timer
+    # 1. Remove Systemd Service Drop-In Overrides
     # -------------------------------------------------------------------------
-    - name: "Stop and disable weekly fstrim.timer"
-      ansible.builtin.systemd:
-        name: fstrim.timer
-        state: stopped
-        enabled: false
-      ignore_errors: true
-      register: timer_disable_res
-
-    # -------------------------------------------------------------------------
-    # 2. Remove Systemd Service Drop-In Overrides
-    # -------------------------------------------------------------------------
-    - name: "Remove fstrim systemd override directory"
+    - name: Remove fstrim systemd override directory
       ansible.builtin.file:
         path: /etc/systemd/system/fstrim.service.d
         state: absent
       register: override_remove_res
+      notify: Reload systemd
 
-    - name: "Reload systemd daemon after configuration purge"
-      ansible.builtin.systemd:
-        daemon_reload: true
-      when: override_remove_res.changed
+    - name: Apply systemd unit changes
+      ansible.builtin.meta: flush_handlers
 
     # -------------------------------------------------------------------------
-    # 3. Compile & Display Teardown Summary
+    # 2. Restore Original fstrim.timer State
     # -------------------------------------------------------------------------
-    - name: "Store local node teardown facts"
+    - name: Restore original fstrim.timer state
+      ansible.builtin.systemd_service:
+        name: fstrim.timer
+        enabled: "{{ restore_timer_enabled }}"
+        state: "{{ 'started' if restore_timer_active else 'stopped' }}"
+      register: timer_restore_res
+
+    # -------------------------------------------------------------------------
+    # 3. Compile & Display Teardown Summary, Remove Recorded State
+    # -------------------------------------------------------------------------
+    - name: Store local node teardown facts
       ansible.builtin.set_fact:
         trim_teardown_status:
-          timer_state: "{{ 'Disabled & Stopped' if not timer_disable_res.failed else 'Failed / Not Installed' }}"
-          override_state: "{{ 'Removed' if override_remove_res.changed else 'Clean' }}"
+          timer_state: >-
+            {{ 'Enabled' if restore_timer_enabled else 'Disabled' }} &
+            {{ 'Started' if restore_timer_active else 'Stopped' }}
+            ({{ 'restored from recorded state' if trim_state else 'default, no recorded state' }})
+          override_state: "{{ 'Removed' if override_remove_res is changed else 'Clean' }}"
 
-    - name: "Display Storage TRIM Teardown Summary"
+    - name: Display Storage TRIM Teardown Summary
       ansible.builtin.debug:
-        msg: "{{ lookup('template', project_root ~ '/templates/trim_teardown_report.j2').split('\n') }}"
-      run_once: true
+        msg: >-
+          {{ lookup('ansible.builtin.template', project_root ~ '/templates/trim_teardown_report.j2').splitlines() }}
+      when: inventory_hostname == ansible_play_hosts | first
+
+    - name: Remove recorded TRIM state
+      ansible.builtin.file:
+        path: /etc/ansible/facts.d/mikmakmuk_trim.fact
+        state: absent
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true

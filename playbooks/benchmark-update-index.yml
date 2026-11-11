@@ -1,0 +1,23 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Publish collected benchmark results as cards in index.html
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars_files:
+    - vars/benchmark.yml
+
+  tasks:
+    - name: Load collected benchmark results
+      ansible.builtin.import_tasks: tasks/load-benchmark-results.yml
+
+    - name: Insert or refresh benchmark section in index.html
+      ansible.builtin.blockinfile:
+        path: "{{ benchmark_index_html_path }}"
+        marker: "      <!-- {mark} BENCHMARK RESULTS (managed by playbooks/benchmark-update-index.yml) -->"
+        # First run only: place the section between the topology table and the design choices.
+        insertbefore: "^\\s*<!-- UNORTHODOX ENGINEERING & DESIGN CHOICES -->"
+        block: "{{ lookup('ansible.builtin.template', project_root ~ '/templates/benchmark_index_section.html.j2') }}"
+        append_newline: true
+        prepend_newline: true

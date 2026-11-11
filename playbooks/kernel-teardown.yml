@@ -4,9 +4,18 @@
   hosts: cluster_nodes
   become: true
   vars:
-    project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
-    tuning_cmdline: "{{ lookup('ansible.builtin.file', project_root ~ '/files/homelab-tuning.conf', errors='ignore') | default('', true) | trim }}"
-    tuning_tokens: "{{ tuning_cmdline.split() if tuning_cmdline | length > 0 else [] }}"
+    project_root: "{{ playbook_dir | dirname }}"
+    tuning_tokens: "{{ (lookup('ansible.builtin.file', project_root ~ '/files/homelab-tuning.conf') | trim).split() }}"
+    limine_default_entry: "CachyOS/linux-cachyos"
+    # Recorded by kernel-setup.yml; absent on nodes provisioned by older versions.
+    kernel_state: "{{ ansible_local['mikmakmuk_kernel'] | default({}) }}"
+    boot_time_files:
+      - /etc/tmpfiles.d/homelab-cpu-performance.conf
+      # Unit used by earlier kernel-setup versions
+      - /etc/systemd/system/cpu-performance.service
+      - /etc/sysctl.d/99-homelab-performance.conf
+      - /etc/modules-load.d/igpu.conf
+      - /etc/cmdline.d/homelab-tuning.conf
 
   tasks:
     # -------------------------------------------------------------------------
@@ -18,112 +27,88 @@
         state: directory
         owner: root
         group: root
-        mode: '0700'
+        mode: "0700"
 
     # -------------------------------------------------------------------------
-    # 2. Revert CPU Performance Service, Environment Drop-Ins & Power
+    # 2. Remove CPU Performance Service, Sysctl & Module Drop-Ins
     # -------------------------------------------------------------------------
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
     - name: Disable and stop CPU performance service
-      ansible.builtin.systemd:
-        name: cpu-performance
+      ansible.builtin.systemd_service:
+        name: cpu-performance.service
         enabled: false
         state: stopped
-      failed_when: false
+      when: "'cpu-performance.service' in ansible_facts['services']"
 
-    - name: Remove CPU performance systemd service unit file
+    - name: Remove governor, sysctl, module and cmdline drop-ins
       ansible.builtin.file:
-        path: /etc/systemd/system/cpu-performance.service
+        path: "{{ item }}"
         state: absent
+      loop: "{{ boot_time_files }}"
+      register: boot_time_files_removed
+      notify: Reload systemd
 
-    - name: Disable and stop cpupower service
-      ansible.builtin.systemd:
+    - name: Reload systemd after removing the unit file
+      ansible.builtin.meta: flush_handlers
+
+    # Earlier versions of kernel-setup.yml installed cpupower without recording it.
+    - name: Remove cpupower installed by earlier kernel-setup versions
+      community.general.pacman:
         name: cpupower
-        enabled: false
-        state: stopped
-      failed_when: false
-
-    - name: Remove cpupower default configuration
-      ansible.builtin.file:
-        path: /etc/default/cpupower
         state: absent
-
-    - name: Remove iGPU DRI environment drop-in file
-      ansible.builtin.file:
-        path: /etc/environment.d/99-homelab-igpu-dri.conf
-        state: absent
-
-    - name: Revert CPU scaling governor to powersave across all cores
-      ansible.builtin.shell:
-        cmd: |
-          for gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
-            [ -f "$gov" ] && echo powersave > "$gov"
-          done
-      changed_when: false
-
-    - name: Revert CPU EPP profile to balance_performance across all cores
-      ansible.builtin.shell:
-        cmd: |
-          for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
-            [ -f "$epp" ] && echo balance_performance > "$epp"
-          done
-      changed_when: false
-
-    - name: Remove sysctl performance configuration
-      ansible.builtin.file:
-        path: /etc/sysctl.d/99-homelab-performance.conf
-        state: absent
-
-    - name: Remove iGPU module load configuration
-      ansible.builtin.file:
-        path: /etc/modules-load.d/igpu.conf
-        state: absent
-
-    - name: Remove leftover cmdline.d drop-ins if present
-      ansible.builtin.file:
-        path: /etc/cmdline.d/homelab-tuning.conf
-        state: absent
+        extra_args: --unneeded
+      when: kernel_state | length == 0
 
     # -------------------------------------------------------------------------
-    # 3. Revert /etc/default/limine & Inspect Live State
+    # 3. Revert /etc/default/limine
     # -------------------------------------------------------------------------
-    - name: Read current /etc/default/limine content
-      ansible.builtin.command: cat /etc/default/limine
-      register: limine_default_file
-      changed_when: false
-
-    - name: Strip tuning parameters from KERNEL_CMDLINE[default] in /etc/default/limine
+    - name: Strip tuning parameters from KERNEL_CMDLINE[default]
       ansible.builtin.replace:
         path: /etc/default/limine
-        regexp: "{{ '\\s*\\b' ~ (item | regex_escape) ~ '\\b' }}"
-        replace: ''
+        # Exact token match: preceded by whitespace, followed by whitespace or the closing quote.
+        regexp: "{{ '\\s' ~ (item | regex_escape) ~ '(?=[\\s\"])' }}"
+        replace: ""
       loop: "{{ tuning_tokens }}"
-      when: tuning_tokens | length > 0
-      register: teardown_limine_result
+      register: limine_tokens_removed
 
-    - name: Read live running /proc/cmdline
-      ansible.builtin.command: cat /proc/cmdline
-      register: proc_cmdline_check
-      changed_when: false
+    - name: Restore original BOOT_ORDER
+      ansible.builtin.lineinfile:
+        path: /etc/default/limine
+        regexp: "^BOOT_ORDER=.*"
+        line: "{{ kernel_state['boot_order'] }}"
+      when: kernel_state['boot_order'] | default(none) is string
+      register: limine_order_restored
 
-    - name: Read current /boot/limine.conf content
-      ansible.builtin.command: cat /boot/limine.conf
-      register: limine_conf_check
-      changed_when: false
+    - name: Remove BOOT_ORDER that did not exist before setup
+      ansible.builtin.lineinfile:
+        path: /etc/default/limine
+        regexp: "^BOOT_ORDER=.*"
+        state: absent
+      when: "'boot_order' in kernel_state and kernel_state['boot_order'] is none"
+      register: limine_order_removed
 
-    # Check if any tuning token is still active in the running kernel command line
-    - name: Check for active tuning tokens in running kernel command line
-      ansible.builtin.set_fact:
-        active_tuning_tokens: "{{ tuning_tokens | select('in', proc_cmdline_check.stdout) | list }}"
+    - name: Read running kernel command line and Limine configuration
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /proc/cmdline
+        - /boot/limine.conf
+      register: kernel_live_raw
 
-    - name: Determine if reboot is strictly required for teardown
+    - name: Determine if bootloader regeneration and reboot are required
       ansible.builtin.set_fact:
         requires_reboot: >-
-          {{ (teardown_limine_result.changed | default(false)) or
-             (active_tuning_tokens | length > 0) or
-             ('default_entry: CachyOS/linux-cachyos' not in limine_conf_check.stdout) }}
+          {{ (limine_tokens_removed is changed)
+              or (limine_order_restored is changed)
+              or (limine_order_removed is changed)
+              or (boot_time_files_removed is changed)
+              or (tuning_tokens | intersect((kernel_live_raw.results[0].content | b64decode).split()) | length > 0)
+              or (('default_entry: ' ~ limine_default_entry) not in (kernel_live_raw.results[1].content | b64decode)) }}
 
     # -------------------------------------------------------------------------
-    # 4. Rebuild Bootloader Architecture (Order Matters)
+    # 4. Rebuild Bootloader Entries (Order Matters)
     # -------------------------------------------------------------------------
     - name: Rebuild initramfs images for all installed kernels
       ansible.builtin.command:
@@ -137,19 +122,19 @@
       changed_when: true
       when: requires_reboot | bool
 
-    - name: Disable remember_last_entry in /boot/limine.conf AFTER regeneration
+    - name: Disable remember_last_entry in /boot/limine.conf after regeneration
       ansible.builtin.replace:
         path: /boot/limine.conf
         regexp: '^\s*remember_last_entry\s*:\s*.*$'
-        replace: 'remember_last_entry: no'
+        replace: "remember_last_entry: no"
       when: requires_reboot | bool
 
-    - name: Ensure default_entry is explicitly set in /boot/limine.conf AFTER regeneration
+    - name: Ensure default_entry is explicitly set in /boot/limine.conf after regeneration
       ansible.builtin.lineinfile:
         path: /boot/limine.conf
         regexp: '^\s*default_entry\s*:.*$'
-        line: 'default_entry: CachyOS/linux-cachyos'
-        insertafter: '^timeout:'
+        line: "default_entry: {{ limine_default_entry }}"
+        insertafter: "^timeout:"
         state: present
       when: requires_reboot | bool
 
@@ -166,17 +151,51 @@
         test_command: uptime
       when: requires_reboot | bool
 
-    - name: Read live running kernel command line (/proc/cmdline) post-teardown
-      ansible.builtin.command:
-        cmd: cat /proc/cmdline
-      register: live_cmdline_post
-      changed_when: false
+    - name: Read running kernel command line after teardown
+      ansible.builtin.slurp:
+        src: /proc/cmdline
+      register: live_cmdline_raw
 
     - name: Assert performance parameters are absent from /proc/cmdline
       ansible.builtin.assert:
         that:
-          - item not in live_cmdline_post.stdout
-        fail_msg: "Teardown failed! Parameter still active in /proc/cmdline: {{ item }}"
-        success_msg: "Verified {{ item }} is absent from /proc/cmdline"
-      loop: "{{ tuning_tokens }}"
-      when: tuning_tokens | length > 0
+          - tuning_tokens | intersect((live_cmdline_raw.content | b64decode).split()) | length == 0
+        fail_msg: >-
+          Teardown failed, still active in /proc/cmdline:
+          {{ tuning_tokens | intersect((live_cmdline_raw.content | b64decode).split()) | join(' ') }}
+        success_msg: "Verified no tuning parameters remain in /proc/cmdline"
+
+    # The reboot above drops the performance governor; confirm the recorded one is back.
+    - name: Read active CPU governor and EPP
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+        - /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference
+      register: cpu_policy_raw
+      when: kernel_state | length > 0
+
+    - name: Assert original CPU governor and EPP are restored
+      ansible.builtin.assert:
+        that:
+          - live_cpu_policy == recorded_cpu_policy
+        fail_msg: >-
+          CPU governor/EPP is {{ live_cpu_policy | join('/') }}, recorded {{ recorded_cpu_policy | join('/') }}
+        quiet: true
+      vars:
+        live_cpu_policy: >-
+          {{ cpu_policy_raw.results | map(attribute='content') | map('b64decode') | map('trim') | list }}
+        recorded_cpu_policy:
+          - "{{ kernel_state['scaling_governor'] }}"
+          - "{{ kernel_state['energy_performance_preference'] }}"
+      when: kernel_state | length > 0
+
+    - name: Remove recorded kernel state
+      ansible.builtin.file:
+        path: /etc/ansible/facts.d/mikmakmuk_kernel.fact
+        state: absent
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true

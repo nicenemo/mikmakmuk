@@ -138,6 +138,25 @@ ansible-playbook reboot.yml --limit muk
 
 ```
 
+### Benchmarks
+
+`setup.yml` only configures the nodes; all measurement is done by `benchmark.yml`. Every benchmark writes one JSON
+file per node to `/tmp/mikmakmuk-benchmarks/<benchmark>/<host>.json` on the control laptop (override the location with
+`MIKMAKMUK_BENCHMARK_DIR`), and the run ends with a Markdown report in that same directory.
+
+```bash
+# Hardware audit, network, SSD, CPU, iGPU and combined-load benchmarks + Markdown report
+./benchmark.yml
+
+# Single benchmark (playbooks/benchmark-{hardware,network,ssd,cpu,igpu,full-load}.yml)
+ansible-playbook playbooks/benchmark-cpu.yml --limit mak
+
+# Rebuild the Markdown report / publish the results as cards in index.html
+ansible-playbook playbooks/benchmark-report.yml
+ansible-playbook playbooks/benchmark-update-index.yml
+
+```
+
 ---
 
 ## Architecture Rationale: Dedicated Automation Lifecycle

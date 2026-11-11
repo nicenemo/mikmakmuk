@@ -1,0 +1,37 @@
+---
+# Loads every <benchmark_results_dir>/<benchmark>/<host>.json on the controller into
+#   benchmark_results: {<benchmark>: {<host>: {benchmark, host, generated_at, result}}}
+#   benchmark_hosts:   hosts that have at least one result, in inventory order
+- name: Find benchmark result files on controller
+  ansible.builtin.find:
+    paths: "{{ benchmark_results_dir }}"
+    patterns: "*.json"
+    recurse: true
+  register: benchmark_result_files
+
+- name: Verify benchmark results are available
+  ansible.builtin.assert:
+    that:
+      - benchmark_result_files.matched > 0
+    fail_msg: "No benchmark results found in {{ benchmark_results_dir }}. Run ./benchmark.yml first."
+    quiet: true
+
+- name: Load benchmark results grouped by benchmark and host
+  ansible.builtin.set_fact:
+    benchmark_results: >-
+      {{ benchmark_results | default({})
+          | combine({benchmark_doc['benchmark']: {benchmark_doc['host']: benchmark_doc}}, recursive=true) }}
+  loop: "{{ benchmark_result_files.files | map(attribute='path') | sort }}"
+  loop_control:
+    label: "{{ item | relpath(benchmark_results_dir) }}"
+  vars:
+    benchmark_doc: "{{ lookup('ansible.builtin.file', item) | from_json }}"
+
+- name: Determine hosts with benchmark results in inventory order
+  ansible.builtin.set_fact:
+    benchmark_hosts: >-
+      {{ (inventory_order | select('in', result_hosts) | list)
+          + (result_hosts | difference(inventory_order) | sort) }}
+  vars:
+    inventory_order: "{{ groups['cluster_nodes'] | default([]) }}"
+    result_hosts: "{{ benchmark_results.values() | map('list') | flatten | unique }}"

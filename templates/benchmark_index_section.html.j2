@@ -1,0 +1,72 @@
+{% import 'benchmark_macros.j2' as m %}
+      <section id="benchmarks">
+        <h2>Benchmark Results</h2>
+        <p>
+          Measured with <code>./benchmark.yml</code> on bare-metal CachyOS. Last update:
+          {{ benchmark_results.values() | map('dict2items') | flatten | map(attribute='value.generated_at') | max }}.
+        </p>
+        <!-- One card per row: the per-node tables need the full content width. -->
+        <div style="display: grid; gap: 1rem;">
+{% for section in benchmark_report_sections if section.key in benchmark_results %}
+{% set per_host = benchmark_results[section.key] %}
+{% set hosts = benchmark_hosts | select('in', per_host) | list %}
+          <div class="card" style="min-width: 0;">
+            <h3>{{ section.title | e }}</h3>
+            <p style="font-size: 0.8rem; margin-bottom: 0;">Collected {{ m.collected_at(per_host) | e }}</p>
+{% if section.type | default('table') == 'network' %}
+{% set tests = hosts | map('extract', per_host) | map(attribute='result.tests') | flatten %}
+{% set tiers = tests | map(attribute='tier') | unique | list %}
+            <div style="overflow-x: auto;">
+            <table class="hardware-table">
+              <thead>
+                <tr>
+                  <th>Path</th>
+{% for tier in tiers %}
+                  <th>{{ tier | e }}</th>
+{% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+{% for source in hosts %}
+{% for target in benchmark_hosts if target != source %}
+                <tr>
+                  <td><code>{{ source | e }}</code> &rarr; <code>{{ target | e }}</code></td>
+{% for tier in tiers %}
+{% set hit = tests | selectattr('tier', 'equalto', tier) | selectattr('source', 'equalto', source)
+                    | selectattr('target', 'equalto', target) | first | default({}) %}
+                  <td>{{ m.fmt(hit.received_gbps | default(none), {'precision': 2, 'unit': 'Gbps'}) | e }}</td>
+{% endfor %}
+                </tr>
+{% endfor %}
+{% endfor %}
+              </tbody>
+            </table>
+            </div>
+{% else %}
+            <div style="overflow-x: auto;">
+            <table class="hardware-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+{% for host in hosts %}
+                  <th>{{ host | e }}</th>
+{% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+{% for metric in section.metrics %}
+                <tr>
+                  <td>{{ metric.label | e }}</td>
+{% for host in hosts %}
+                  <td>{{ m.fmt(per_host[host].result[metric.key] | default(none), metric) | e }}</td>
+{% endfor %}
+                </tr>
+{% endfor %}
+              </tbody>
+            </table>
+            </div>
+{% endif %}
+          </div>
+{% endfor %}
+        </div>
+      </section>

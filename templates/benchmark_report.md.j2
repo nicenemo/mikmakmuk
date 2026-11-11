@@ -1,0 +1,46 @@
+{% import 'benchmark_macros.j2' as m %}
+{% macro md(text) %}{{ text | string | replace('|', '\\|') }}{% endmacro %}
+# Mik Mak Muk Benchmark Report
+
+Generated {{ now(utc=true).strftime('%Y-%m-%d %H:%M UTC') }} from the JSON results in `{{ benchmark_results_dir }}`.
+{% for section in benchmark_report_sections if section.key in benchmark_results %}
+{% set per_host = benchmark_results[section.key] %}
+{% set hosts = benchmark_hosts | select('in', per_host) | list %}
+
+## {{ section.title }}
+
+Collected: {{ m.collected_at(per_host) }} ({{ hosts | join(', ') }})
+
+{% if section.type | default('table') == 'network' %}
+{% set tests = hosts | map('extract', per_host) | map(attribute='result.tests') | flatten %}
+{% set tiers = tests | map(attribute='tier') | unique | list %}
+| Path |{% for tier in tiers %} {{ tier }} (Gbps) | {{ tier }} retransmits |{% endfor %}
+
+| :--- |{% for tier in tiers %} ---: | ---: |{% endfor %}
+
+{% for source in hosts %}
+{% for target in benchmark_hosts if target != source %}
+{% set row = namespace(text='| ' ~ source ~ ' → ' ~ target ~ ' |') %}
+{% for tier in tiers %}
+{% set hit = tests | selectattr('tier', 'equalto', tier) | selectattr('source', 'equalto', source)
+                    | selectattr('target', 'equalto', target) | first | default({}) %}
+{% set row.text = row.text ~ ' ' ~ m.fmt(hit.received_gbps | default(none), {'precision': 2}) ~ ' |' %}
+{% set row.text = row.text ~ ' ' ~ m.fmt(hit.retransmits | default(none), {'precision': 0}) ~ ' |' %}
+{% endfor %}
+{{ row.text }}
+{% endfor %}
+{% endfor %}
+{% else %}
+| Metric |{% for host in hosts %} {{ host }} |{% endfor %}
+
+| :--- |{% for host in hosts %} ---: |{% endfor %}
+
+{% for metric in section.metrics %}
+{% set row = namespace(text='| ' ~ metric.label ~ ' |') %}
+{% for host in hosts %}
+{% set row.text = row.text ~ ' ' ~ md(m.fmt(per_host[host].result[metric.key] | default(none), metric)) ~ ' |' %}
+{% endfor %}
+{{ row.text }}
+{% endfor %}
+{% endif %}
+{% endfor %}

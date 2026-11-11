@@ -1,16 +1,14 @@
 #!/usr/bin/env ansible-playbook
 ---
-# -----------------------------------------------------------------------------
-# 1. Base Environment & Internal Root CA Setup
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Master Homelab Setup Orchestrator (configuration only, no benchmarks)
+# Benchmarks live in ./benchmark.yml.
+# =============================================================================
 - name: Import Base Setup Playbook
   ansible.builtin.import_playbook: playbooks/base-setup.yml
 
 - name: Import Kernel Setup Playbook
   ansible.builtin.import_playbook: playbooks/kernel-setup.yml
-
-- name: Import Check Hardware Power Playbook
-  ansible.builtin.import_playbook: playbooks/check-hardware-power.yml
 
 - name: Import FSTAB Setup Playbook
   ansible.builtin.import_playbook: playbooks/fstab-setup.yml
@@ -18,11 +16,5 @@
 - name: Import SSD Trim Setup Playbook
   ansible.builtin.import_playbook: playbooks/trim-setup.yml
 
-- name: Import SSD performance benchmark Playbook
-  ansible.builtin.import_playbook: playbooks/ssd-performance-benchmark.yml
-
 - name: Import Network Setup Playbook
   ansible.builtin.import_playbook: playbooks/network-setup.yml
-
-- name: Import Iperf 3 Speedtest Playbook
-  ansible.builtin.import_playbook: playbooks/iperf3-speedtest.yml

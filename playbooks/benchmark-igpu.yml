@@ -1,209 +1,228 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: "Cluster Integrated GPU (Intel UHD 630) Complete Performance & Thermal Benchmark"
+- name: Benchmark integrated GPU (Intel UHD 630) compute, media and 3D performance
   hosts: cluster_nodes
   become: true
-  environment:
-    MESA_LOADER_DRIVER_OVERRIDE: "iris"
-    LIBGL_ALWAYS_SOFTWARE: "0"
-    RUSTICL_ENABLE: "iris"
+  vars_files:
+    - vars/benchmark.yml
+  vars:
+    igpu_gpu_env:
+      MESA_LOADER_DRIVER_OVERRIDE: iris
+      LIBGL_ALWAYS_SOFTWARE: "0"
+      RUSTICL_ENABLE: iris
+    igpu_weston_unit: mikmakmuk-benchmark-weston
+    igpu_wayland_env:
+      XDG_RUNTIME_DIR: "/run/{{ igpu_weston_unit }}"
+      WAYLAND_DISPLAY: wayland-benchmark
+    igpu_3d_timeout_s: 900
+  environment: "{{ igpu_gpu_env }}"
 
   tasks:
     # -------------------------------------------------------------------------
-    # 1. Ensure Complete Diagnostic, Compute, & Wayland Tooling Is Installed
+    # 1. Dependencies & Idle Baseline
     # -------------------------------------------------------------------------
-    - name: "Install iGPU diagnostic, Vulkan, and Wayland benchmark tooling"
+    - name: Install iGPU compute, media, Vulkan and Wayland benchmark tooling
       community.general.pacman:
-        name:
-          - intel-gpu-tools
-          - libva-intel-driver
-          - intel-media-driver
-          - mesa
-          - vulkan-intel
-          - vulkan-tools
-          - clinfo
-          - stress-ng
-          - lm_sensors
-          - clpeak
-          - vkmark
-          - weston
-          - glmark2
+        name: >-
+          {{ benchmark_tool_packages.igpu
+              + ['intel-gpu-tools', 'libva-utils', 'intel-media-driver', 'mesa', 'vulkan-intel', 'lm_sensors'] }}
         state: present
 
-    # -------------------------------------------------------------------------
-    # 2. Pre-Flight iGPU Capability & Topology Audit
-    # -------------------------------------------------------------------------
-    - name: "Query OpenCL Compute Capabilities (Mesa RustiCL)"
-      ansible.builtin.shell:
-        cmd: |
-          clinfo 2>/dev/null | grep -i 'Platform Name' | head -n1 | sed -E 's/.*Platform Name\s*:?\s*//' | xargs || echo 'No OpenCL Provider'
-      register: opencl_audit_raw
-      changed_when: false
+    - name: Read idle temperatures
+      ansible.builtin.import_tasks: tasks/read-sensors.yml
 
-    - name: "Query Vulkan Physical Device Capabilities"
-      ansible.builtin.shell:
-        cmd: |
-          vulkaninfo --summary 2>/dev/null | grep -iE '(deviceName|driverName|driverInfo)' | sed -E 's/^\s*//' | tr '\n' ' | ' | tr -s ' ' | sed 's/ | $//' || echo 'No Vulkan Driver'
-      register: vulkan_audit_raw
-      changed_when: false
-
-    - name: "Query VA-API Driver & Profile Support"
-      ansible.builtin.shell:
-        cmd: |
-          LIBVA_DRIVER_NAME=iHD vainfo 2>&1 | grep -E 'Driver version' | head -n 1 | sed -E 's/.*Driver version:\s*//' | tr -s ' ' || echo 'No VA-API Driver'
-      register: vaapi_audit_raw
-      changed_when: false
-
-    - name: "Query Sysfs GPU Frequency Limits"
-      ansible.builtin.shell:
-        cmd: |
-          intel_gpu_frequency -g 2>/dev/null | tr '\n' ' ' | tr -s ' ' || echo 'N/A'
-      register: freq_audit_raw
-      changed_when: false
-
-    - name: "Display Pre-Flight iGPU Capability Report"
-      ansible.builtin.debug:
-        msg:
-          - "========================================================================="
-          - "                 PRE-FLIGHT iGPU CAPABILITY AUDIT REPORT"
-          - "========================================================================="
-          - "Host                     : {{ inventory_hostname.upper() }}"
-          - "OpenCL Topology          : {{ opencl_audit_raw.stdout | trim }}"
-          - "Vulkan Device Summary    : {{ vulkan_audit_raw.stdout | trim }}"
-          - "VA-API Hardware Driver   : {{ vaapi_audit_raw.stdout | trim }}"
-          - "GPU Frequency Limits     : {{ freq_audit_raw.stdout | trim }}"
-          - "-------------------------------------------------------------------------"
-
-    # -------------------------------------------------------------------------
-    # 3. Baseline Pre-Test Thermal Readings
-    # -------------------------------------------------------------------------
-    - name: "Query Pre-Test CPU/iGPU Core Temperature"
-      ansible.builtin.shell:
-        cmd: |
-          sensors 2>/dev/null | grep -iE '(Package id 0|Core 0)' | head -n1 | awk '{print $4}' | tr -d '+°C' || echo 'N/A'
-      register: igpu_temp_pre_raw
-      changed_when: false
-
-    # -------------------------------------------------------------------------
-    # 4. Detailed Component Checks
-    # -------------------------------------------------------------------------
-    - name: "Check OpenCL Platform & Compute Topology"
-      ansible.builtin.shell:
-        cmd: |
-          plat=$(clinfo 2>/dev/null | grep -i 'Platform Name' | head -n1 | sed -E 's/.*Platform Name\s*:?\s*//' | xargs)
-          units=$(clinfo 2>/dev/null | grep -i 'Max compute units' | head -n1 | awk '{print $NF}')
-          if [ "$units" -eq 3 ]; then
-            eu_desc="24 EUs (3 Sub-slices)"
-          else
-            eu_desc="${units:-0} EUs"
-          fi
-          echo "${plat:-rusticl} (${eu_desc})"
-      register: opencl_topology_raw
-      changed_when: false
-
-    - name: "Check VA-API Hardware Decode Profiles"
-      ansible.builtin.shell:
-        cmd: |
-          LIBVA_DRIVER_NAME=iHD vainfo 2>/dev/null | grep -c 'VAProfile' || echo '0'
-      register: vaapi_profiles_raw
-      changed_when: false
-
-    # -------------------------------------------------------------------------
-    # 5. Sustained GPGPU Matrix Compute (OpenCL Math)
-    # -------------------------------------------------------------------------
-    - name: "Run Sustained Headless GPGPU Matrix Compute Stress"
-      ansible.builtin.shell:
-        cmd: |
-          gflops=$(clpeak --compute-sp 2>&1 | grep -i 'Single-precision compute' | awk -F':' '{print $2}' | xargs || echo "")
-          stress-ng --gpu 1 --gpu-method matrixprod --timeout 30s >/dev/null 2>&1 || true
-          echo "${gflops:-400.0 GFLOPS (OpenCL Matrix Executed)}"
-      register: gpgpu_bops_raw
-      changed_when: false
-
-    # -------------------------------------------------------------------------
-    # 6. Combined Headless Wayland 3D Benchmarks (vkmark + glmark2-es2)
-    # -------------------------------------------------------------------------
-    - name: "Run Headless Wayland 3D Benchmarks (vkmark & glmark2-es2)"
-      ansible.builtin.shell:
-        cmd: |
-          export XDG_RUNTIME_DIR=/tmp/wayland-runtime-root
-          mkdir -p -m 0700 "$XDG_RUNTIME_DIR"
-
-          # Start Weston with explicit hardware OpenGL renderer
-          weston --backend=headless-backend.so --renderer=gl --socket=wayland-1 >/dev/null 2>&1 &
-          WESTON_PID=$!
-          sleep 2
-
-          export WAYLAND_DISPLAY=wayland-1
-
-          # 1. Run Vulkan 3D benchmark via Wayland WSI surface
-          vk_score=$(vkmark --winsys=wayland 2>&1 | grep -i 'vkmark Score' | awk '{print $NF}' || echo "N/A")
-
-          # 2. Run GLES2 benchmark via Wayland surface
-          glmark_out=$(glmark2-es2-wayland --off-screen 2>&1)
-          gl_score=$(echo "$glmark_out" | grep -i 'glmark2 Score' | awk '{print $NF}' || echo "N/A")
-          renderer=$(echo "$glmark_out" | grep -i 'GL_RENDERER' | awk -F':' '{print $2}' | xargs || echo "Intel Iris")
-
-          kill $WESTON_PID 2>/dev/null || true
-          rm -rf "$XDG_RUNTIME_DIR"
-
-          echo "${vk_score:-N/A} | ${gl_score:-N/A} (Renderer: ${renderer})"
-      register: wayland_benchmarks_raw
-      changed_when: false
-
-    # -------------------------------------------------------------------------
-    # 7. Post-Test Telemetry & Summary Matrix
-    # -------------------------------------------------------------------------
-    - name: "Query iGPU Max Frequency"
-      ansible.builtin.shell:
-        cmd: |
-          freq=$(intel_gpu_frequency -g 2>/dev/null | sed -n -E 's/.*max:\s*([0-9]+)\s*MHz.*/\1/p')
-          echo "${freq:-1100}"
-      register: igpu_max_freq_raw
-      changed_when: false
-
-    - name: "Query Post-Test CPU/iGPU Core Temperature"
-      ansible.builtin.shell:
-        cmd: |
-          sensors 2>/dev/null | grep -iE '(Package id 0|Core 0)' | head -n1 | awk '{print $4}' | tr -d '+°C' || echo 'N/A'
-      register: igpu_temp_post_raw
-      changed_when: false
-
-    - name: "Check i915 / GPU Thermal and Power Limitation Events"
-      ansible.builtin.shell:
-        cmd: |
-          logs=$(dmesg | grep -iE '(i915|gpu|intel_gpu|thermal|throttle)' | grep -iE '(downclock|throttl|limit|overtemp)' | tail -n1 | tr '\n' ' ' | tr -s ' ')
-          echo "${logs:-None Detected}"
-      register: gpu_throttle_logs_raw
-      changed_when: false
-
-    # -------------------------------------------------------------------------
-    # 8. Compile iGPU Facts & Print Consolidated Summary Matrix
-    # -------------------------------------------------------------------------
-    - name: "Compile iGPU Telemetry Facts"
+    - name: Record idle temperatures
       ansible.builtin.set_fact:
-        node_igpu_bench:
-          gpu_model: "Intel UHD Graphics 630"
-          max_clock: "{{ (igpu_max_freq_raw.stdout | trim) }} MHz"
-          opencl_topology: "{{ opencl_topology_raw.stdout | trim }}"
-          vaapi_supported_codecs: "{{ vaapi_profiles_raw.stdout | trim }} profiles"
-          gpgpu_stress_bops: "{{ gpgpu_bops_raw.stdout | trim }}"
-          wayland_3d_scores: "{{ wayland_benchmarks_raw.stdout | trim }}"
-          igpu_temp_delta: "{{ igpu_temp_pre_raw.stdout | trim }} °C (Idle) --> {{ igpu_temp_post_raw.stdout | trim }} °C (Post-Test)"
-          gpu_throttle_events: "{{ gpu_throttle_logs_raw.stdout | trim }}"
+        igpu_temps_idle: "{{ sensor_temps }}"
 
-    - name: "Display iGPU Benchmark Summary"
-      ansible.builtin.debug:
-        msg:
-          - "========================================================================="
-          - "        CLUSTER INTEGRATED GPU (UHD 630) BENCHMARK & THERMAL MATRIX"
-          - "========================================================================="
-          - "Host                     : {{ inventory_hostname.upper() }}"
-          - "iGPU Hardware            : {{ node_igpu_bench.gpu_model }} (Max: {{ node_igpu_bench.max_clock }})"
-          - "OpenCL / Compute Stack   : {{ node_igpu_bench.opencl_topology }}"
-          - "VA-API Hardware Codecs   : {{ node_igpu_bench.vaapi_supported_codecs }}"
-          - "Headless GPGPU Compute   : {{ node_igpu_bench.gpgpu_stress_bops }}"
-          - "Wayland 3D Scores (vk/gl): {{ node_igpu_bench.wayland_3d_scores }}"
-          - "Core Thermal Delta       : {{ node_igpu_bench.igpu_temp_delta }}"
-          - "GPU Throttling / Log Event: {{ node_igpu_bench.gpu_throttle_events }}"
-          - "-------------------------------------------------------------------------"
+    - name: Refresh node clock facts
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - date_time
+
+    - name: Record benchmark start time
+      ansible.builtin.set_fact:
+        igpu_start_epoch: "{{ ansible_facts['date_time']['epoch'] }}"
+
+    # -------------------------------------------------------------------------
+    # 2. Capability Audit (VA-API & Frequency Limits)
+    # -------------------------------------------------------------------------
+    - name: Query VA-API driver and profiles on the DRM render node
+      ansible.builtin.command:
+        cmd: vainfo --display drm --device /dev/dri/renderD128
+      environment:
+        LIBVA_DRIVER_NAME: iHD
+      register: igpu_vainfo_raw
+      changed_when: false
+
+    - name: Query iGPU frequency limits
+      ansible.builtin.command:
+        cmd: intel_gpu_frequency --get
+      register: igpu_freq_raw
+      changed_when: false
+
+    # -------------------------------------------------------------------------
+    # 3. Peak Compute & Memory Bandwidth (clpeak, OpenCL + Vulkan)
+    # -------------------------------------------------------------------------
+    - name: Run clpeak compute and bandwidth benchmark
+      block:
+        - name: Create temporary clpeak results file
+          ansible.builtin.tempfile:
+            state: file
+            suffix: .clpeak.json
+          register: igpu_clpeak_file
+
+        - name: Run clpeak FP32 compute and global memory bandwidth tests
+          ansible.builtin.command:
+            cmd: >-
+              clpeak --opencl --vulkan --single-precision-compute --global-memory-bandwidth
+              --output {{ igpu_clpeak_file.path }}
+          changed_when: false
+
+        - name: Read clpeak results
+          ansible.builtin.slurp:
+            src: "{{ igpu_clpeak_file.path }}"
+          register: igpu_clpeak_raw
+
+      always:
+        - name: Remove temporary clpeak results file
+          ansible.builtin.file:
+            path: "{{ igpu_clpeak_file.path }}"
+            state: absent
+          when: igpu_clpeak_file.path is defined
+
+    # -------------------------------------------------------------------------
+    # 4. Headless Wayland 3D Benchmarks (vkmark + glmark2-es2)
+    # -------------------------------------------------------------------------
+    - name: Run headless Wayland 3D benchmarks
+      block:
+        - name: Install runtime unit for the headless Weston compositor
+          ansible.builtin.template:
+            src: "{{ project_root }}/templates/benchmark-weston.service.j2"
+            dest: "/run/systemd/system/{{ igpu_weston_unit }}.service"
+            owner: root
+            group: root
+            mode: "0644"
+          register: igpu_weston_unit_file
+
+        - name: Start headless Weston compositor
+          ansible.builtin.systemd_service:
+            name: "{{ igpu_weston_unit }}.service"
+            state: started
+            daemon_reload: true
+
+        - name: Wait for the Weston Wayland socket
+          ansible.builtin.wait_for:
+            path: "{{ igpu_wayland_env['XDG_RUNTIME_DIR'] }}/{{ igpu_wayland_env['WAYLAND_DISPLAY'] }}"
+            timeout: 15
+
+        - name: Run vkmark Vulkan benchmark
+          ansible.builtin.command:
+            cmd: vkmark --winsys=wayland
+          environment: "{{ igpu_gpu_env | combine(igpu_wayland_env) }}"
+          register: igpu_vkmark_raw
+          changed_when: false
+          timeout: "{{ igpu_3d_timeout_s }}"
+
+        - name: Run glmark2 OpenGL ES 2 benchmark
+          ansible.builtin.command:
+            cmd: glmark2-es2-wayland --off-screen
+          environment: "{{ igpu_gpu_env | combine(igpu_wayland_env) }}"
+          register: igpu_glmark2_raw
+          changed_when: false
+          timeout: "{{ igpu_3d_timeout_s }}"
+
+      always:
+        - name: Stop headless Weston compositor
+          ansible.builtin.systemd_service:
+            name: "{{ igpu_weston_unit }}.service"
+            state: stopped
+          when: igpu_weston_unit_file is succeeded
+
+        - name: Remove runtime unit for the headless Weston compositor
+          ansible.builtin.file:
+            path: "/run/systemd/system/{{ igpu_weston_unit }}.service"
+            state: absent
+          notify: Reload systemd
+
+    # -------------------------------------------------------------------------
+    # 5. Post-Test Thermal & Throttling Audit
+    # -------------------------------------------------------------------------
+    - name: Read post-test temperatures
+      ansible.builtin.import_tasks: tasks/read-sensors.yml
+
+    - name: Collect throttling events logged during the benchmark
+      ansible.builtin.import_tasks: tasks/kernel-throttle-events.yml
+      vars:
+        throttle_since_epoch: "{{ igpu_start_epoch }}"
+
+    # -------------------------------------------------------------------------
+    # 6. Compile & Save Results
+    # -------------------------------------------------------------------------
+    - name: Select clpeak devices per backend
+      ansible.builtin.set_fact:
+        igpu_opencl: >-
+          {{ (igpu_clpeak_raw.content | b64decode | from_json).devices
+              | selectattr('backend', 'equalto', 'OpenCL') | first | default({}) }}
+        igpu_vulkan: >-
+          {{ (igpu_clpeak_raw.content | b64decode | from_json).devices
+              | selectattr('backend', 'equalto', 'Vulkan') | first | default({}) }}
+
+    - name: Compile iGPU benchmark result
+      ansible.builtin.set_fact:
+        igpu_result:
+          gpu_model: "{{ igpu_vulkan.name | default(igpu_opencl.name | default(none)) }}"
+          vulkan_driver: "{{ igpu_vulkan.driver | default(none) }}"
+          opencl_platform: "{{ igpu_opencl.platform | default(none) }}"
+          opencl_driver: "{{ igpu_opencl.driver | default(none) }}"
+          opencl_compute_units: >-
+            {{ igpu_opencl.properties | default([]) | selectattr('key', 'equalto', 'Compute units')
+                | map(attribute='value') | map('int') | first | default(none) }}
+          min_freq_mhz: >-
+            {{ igpu_freq_raw.stdout | regex_findall('min: ([0-9]+) MHz') | map('int') | first | default(none) }}
+          max_freq_mhz: >-
+            {{ igpu_freq_raw.stdout | regex_findall('max: ([0-9]+) MHz') | map('int') | first | default(none) }}
+          opencl_sp_gflops: "{{ ((opencl_sp | map('float') | max) / 1e9) | round(1) if opencl_sp else none }}"
+          opencl_bandwidth_gbs: "{{ ((opencl_bw | map('float') | max) / 1e9) | round(1) if opencl_bw else none }}"
+          vulkan_sp_gflops: "{{ ((vulkan_sp | map('float') | max) / 1e9) | round(1) if vulkan_sp else none }}"
+          vulkan_bandwidth_gbs: "{{ ((vulkan_bw | map('float') | max) / 1e9) | round(1) if vulkan_bw else none }}"
+          vaapi_driver: >-
+            {{ igpu_vainfo_raw.stdout | regex_findall('Driver version: (.+)') | map('trim') | first | default(none) }}
+          vaapi_profile_count: "{{ igpu_vainfo_raw.stdout_lines | select('search', 'VAProfile') | list | length }}"
+          vkmark_score: >-
+            {{ igpu_vkmark_raw.stdout | regex_findall('vkmark Score: ([0-9]+)') | map('int') | first | default(none) }}
+          glmark2_score: >-
+            {{ igpu_glmark2_raw.stdout | regex_findall('glmark2 Score: ([0-9]+)') | map('int')
+                | first | default(none) }}
+          gl_renderer: >-
+            {{ igpu_glmark2_raw.stdout | regex_findall('GL_RENDERER: +(.+)') | map('trim') | first | default(none) }}
+          cpu_temp_idle_c: "{{ igpu_temps_idle.cpu_package_c }}"
+          cpu_temp_post_c: "{{ sensor_temps.cpu_package_c }}"
+          throttle_event_count: "{{ throttle_events | length }}"
+          throttle_events: "{{ throttle_events[-5:] }}"
+      vars:
+        # Metric values (FLOPS or B/s) per vector width for each clpeak test
+        opencl_sp: >-
+          {{ igpu_opencl.tests | default([]) | selectattr('id', 'equalto', 'single_precision_compute')
+              | map(attribute='metrics') | flatten | map(attribute='value') | list }}
+        opencl_bw: >-
+          {{ igpu_opencl.tests | default([]) | selectattr('id', 'equalto', 'global_memory_bandwidth')
+              | map(attribute='metrics') | flatten | map(attribute='value') | list }}
+        vulkan_sp: >-
+          {{ igpu_vulkan.tests | default([]) | selectattr('id', 'equalto', 'single_precision_compute')
+              | map(attribute='metrics') | flatten | map(attribute='value') | list }}
+        vulkan_bw: >-
+          {{ igpu_vulkan.tests | default([]) | selectattr('id', 'equalto', 'global_memory_bandwidth')
+              | map(attribute='metrics') | flatten | map(attribute='value') | list }}
+
+    - name: Save iGPU benchmark result
+      ansible.builtin.import_tasks: tasks/save-benchmark-result.yml
+      vars:
+        benchmark_name: igpu
+        benchmark_result: "{{ igpu_result }}"
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
