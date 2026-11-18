@@ -37,6 +37,7 @@ Design choices and hardware constraints are tracked in the [`adr/`](./adr/) dire
 - [ADR 0013: Renaming Hostnames to Mik, Mak, Muk](./adr/0013-Renaming-host-names-to-mik-mak-muk.md)
 - [ADR 0014: Git Branching Strategy for Service Isolation](./adr/0014-git-branching-strategy.md)
 - [ADR 0015: Storing ssh keys unencrypted](./0015-storying-ssh-keys-unencrytpted.md)
+- [ADR 0016: Secret Scanning with Git Hooks](./adr/0016-secret-scanning-with-git-hooks.md)
 
 ---
 
@@ -205,6 +206,13 @@ sudo faillock --reset
 sudo faillock --user kruse --reset
 
 ```
+
+## Secret scanning
+
+Run `./githooks-setup.sh` once per checkout. The `pre-commit` hook in `.githooks/` runs `gitleaks` on the staged changes
+and the `pre-push` hook runs `trufflehog` on the commits being pushed (`gitleaks` and `trufflehog` must be installed;
+the hooks refuse to run without them). Scan the whole history with `gitleaks git --redact` and
+`trufflehog git file://$PWD`. Never bypass the hooks with `--no-verify`.
 
 ## Project page and licence
 
