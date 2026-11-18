@@ -7,18 +7,42 @@
   <meta name="description" content="A 3-node mini PC homelab cluster running CachyOS on bare metal. Highlighting Linux kernel tuning, hardware hack workarounds, automated enterprise PKI, and systemd automation.">
   <style>
     :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --border: #334155;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --accent: #38bdf8;
-      --accent-hover: #7dd3fc;
-      --code-bg: #090d16;
-      --warning-bg: rgba(245, 158, 11, 0.1);
-      --warning-border: #d97706;
-      --teaser-bg: rgba(56, 189, 248, 0.05);
-      --teaser-border: #38bdf8;
+      color-scheme: light dark;
+      --bg: #f6f7fb;
+      --card-bg: #ffffff;
+      --border: #d9deea;
+      --text: #1b2030;
+      --text-muted: #5a6478;
+      --accent: #3a56d4;
+      --accent-text: #ffffff;
+      --accent-hover: #2c43ad;
+      --code-bg: #eef1f8;
+      --code-text: #1b2030;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      --warning-border: #b45309;
+      --warning-text: #b45309;
+      --teaser-bg: rgba(58, 86, 212, 0.06);
+      --teaser-border: #3a56d4;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b0e14;
+        --card-bg: #151a26;
+        --border: #2a3142;
+        --text: #e6e9f0;
+        --text-muted: #9aa4ba;
+        --accent: #8ea2ff;
+        --accent-text: #0b0e14;
+        --accent-hover: #b4c1ff;
+        --code-bg: #1d2434;
+        --code-text: #e6e9f0;
+        --warning-bg: rgba(245, 158, 11, 0.1);
+        --warning-border: #d97706;
+        --warning-text: #f59e0b;
+        --teaser-bg: rgba(142, 162, 255, 0.07);
+        --teaser-border: #8ea2ff;
+      }
     }
 
     * {
@@ -71,7 +95,7 @@
       align-items: center;
       gap: 0.5rem;
       background-color: var(--accent);
-      color: #0f172a;
+      color: var(--accent-text);
       padding: 0.6rem 1.2rem;
       border-radius: 6px;
       font-size: 0.9rem;
@@ -109,7 +133,7 @@
       font-size: 1.5rem;
       color: var(--accent);
       margin-bottom: 1rem;
-      border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+      border-bottom: 1px solid var(--border);
       padding-bottom: 0.4rem;
     }
 
@@ -132,7 +156,7 @@
     }
 
     .story-box p {
-      color: #cbd5e1;
+      color: var(--text-muted);
       margin-bottom: 0.5rem;
     }
 
@@ -217,7 +241,7 @@
     }
 
     .funny-note strong {
-      color: #f59e0b;
+      color: var(--warning-text);
     }
 
     .teaser-box {
@@ -238,10 +262,10 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 0.85em;
       background-color: var(--code-bg);
-      color: #e2e8f0;
+      color: var(--code-text);
       padding: 0.15rem 0.35rem;
       border-radius: 3px;
-      border: 1px solid rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
     }
 
     footer {
@@ -957,7 +981,7 @@
     </main>
 
     <footer>
-      <p>&copy; 2026 Hans Kruse &bull; Released under the MIT License</p>
+      <p>MIT licence. &copy; 2026 <a href="https://hanskruse.eu">Hans Kruse</a></p>
     </footer>
   </div>
 

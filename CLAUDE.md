@@ -53,7 +53,8 @@ prettier --check .
 ```
 
 There are no tests; verification is running against the nodes (teardown → setup cycle is the idempotency test). The
-only CI (`.github/workflows/static.yml`) deploys the repo as static GitHub Pages (`index.html`).
+only CI (`.github/workflows/static.yml`) deploys `index.html` (and nothing else) to GitHub Pages; the benchmark playbooks
+edit the cards in it, so keep it at the repo root.
 
 ## Architecture
 
