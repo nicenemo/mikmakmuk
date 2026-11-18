@@ -206,7 +206,6 @@ sudo faillock --user kruse --reset
 
 ```
 
-
 ## Project page and licence
 
 `index.html` is the project page, published with GitHub Pages by `.github/workflows/static.yml` (only that file is
