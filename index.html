@@ -1,128 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-GB">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mik Mak Muk, Bare-Metal CachyOS Cluster</title>
-  <meta name="description" content="A 3-node mini PC homelab cluster running CachyOS on bare metal. Highlighting Linux kernel tuning, hardware hack workarounds, automated enterprise PKI, and systemd automation.">
-  <style>
-    :root {
-      color-scheme: light dark;
-      --bg: #f6f7fb;
-      --card-bg: #ffffff;
-      --border: #d9deea;
-      --text: #1b2030;
-      --text-muted: #5a6478;
-      --accent: #3a56d4;
-      --accent-text: #ffffff;
-      --accent-hover: #2c43ad;
-      --code-bg: #eef1f8;
-      --code-text: #1b2030;
-      --warning-bg: rgba(245, 158, 11, 0.12);
-      --warning-border: #b45309;
-      --warning-text: #b45309;
-      --teaser-bg: rgba(58, 86, 212, 0.06);
-      --teaser-border: #3a56d4;
-    }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mik Mak Muk</title>
+<meta name="description" content="A 3-node mini PC homelab cluster running CachyOS on bare metal. Highlighting Linux kernel tuning, hardware hack workarounds, automated enterprise PKI, and systemd automation.">
+<link rel="canonical" href="https://hanskruse.eu/mikmakmuk/">
+<meta name="theme-color" content="#0b0e14" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Mik Mak Muk">
+<meta property="og:description" content="A 3-node mini PC homelab cluster running CachyOS on bare metal. Highlighting Linux kernel tuning, hardware hack workarounds, automated enterprise PKI, and systemd automation.">
+<meta property="og:url" content="https://hanskruse.eu/mikmakmuk/">
+<link rel="stylesheet" href="style.css">
+<script src="menu.js" defer></script>
+<style>
+    /* the content below the banner keeps its own compact reset */
+    /* :where() keeps the specificity at zero, as the original * reset had */
+    :where(main.wrap *) { margin: 0; padding: 0; }
+
 
     @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0b0e14;
-        --card-bg: #151a26;
-        --border: #2a3142;
-        --text: #e6e9f0;
-        --text-muted: #9aa4ba;
-        --accent: #8ea2ff;
-        --accent-text: #0b0e14;
-        --accent-hover: #b4c1ff;
-        --code-bg: #1d2434;
-        --code-text: #e6e9f0;
-        --warning-bg: rgba(245, 158, 11, 0.1);
-        --warning-border: #d97706;
-        --warning-text: #f59e0b;
-        --teaser-bg: rgba(142, 162, 255, 0.07);
-        --teaser-border: #8ea2ff;
-      }
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      padding: 2rem 1rem;
-    }
-
-    .container {
-      max-width: 880px;
-      margin: 0 auto;
-    }
-
-    header {
-      margin-bottom: 2.5rem;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 1.5rem;
-    }
-
-    h1 {
-      font-size: 2.4rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      margin-bottom: 0.5rem;
-      color: var(--text);
-    }
-
-    .subtitle {
-      color: var(--text-muted);
-      font-size: 1.1rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .btn-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-    }
-
-    .github-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      background-color: var(--accent);
-      color: var(--accent-text);
-      padding: 0.6rem 1.2rem;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      font-weight: 700;
-      text-decoration: none;
-      transition: background-color 0.2s ease;
-    }
-
-    .github-btn:hover {
-      background-color: var(--accent-hover);
-    }
-
-    .github-btn.secondary {
-      background-color: var(--card-bg);
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-
-    .github-btn.secondary:hover {
-      background-color: var(--border);
-      color: var(--accent-hover);
-    }
-
-    .github-btn svg {
-      width: 18px;
-      height: 18px;
-      fill: currentColor;
     }
 
     section {
@@ -276,32 +175,16 @@
       color: var(--text-muted);
       font-size: 0.85rem;
     }
-  </style>
+    </style>
 </head>
 <body>
-
-  <div class="container">
-    <header>
-      <h1>Mik Mak Muk</h1>
-      <p class="subtitle">A 160 GB bare-metal CachyOS homelab cluster built on three HP Mini PCs. No heavy hypervisors, no cloud lock-in—just Ansible, custom kernel tuning, zero-touch enterprise PKI, and physical hardware hacks.</p>
-
-      <div class="btn-group">
-        <a href="https://github.com/nicenemo/mikmakmuk" class="github-btn" target="_blank" rel="noopener noreferrer">
-          <svg viewBox="0 0 24 24">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-          </svg>
-          main Branch
-        </a>
-        <a href="https://github.com/nicenemo/mikmakmuk/tree/elastic-direct" class="github-btn secondary" target="_blank" rel="noopener noreferrer">
-          <svg viewBox="0 0 24 24">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-          </svg>
-          elastic-direct Branch
-        </a>
-      </div>
-    </header>
-
-    <main>
+<nav class="sitenav" aria-label="Site"><div class="wrap"><a class="brand" href="index.html">Mik Mak Muk</a><a class="key" href="#topology">Topology</a><a class="key" href="#benchmarks">Benchmarks</a><details class="menu"><summary aria-label="Menu"><span class="burger" aria-hidden="true"></span><span class="label">Menu</span></summary><div class="panel"><div class="col"><h2>On this page</h2><ul><li><a href="#topology">Cluster topology</a></li><li><a href="#benchmarks">Benchmark results</a></li><li><a href="#design">Design choices</a></li><li><a href="#lab">Tales from the lab</a></li><li><a href="#branches">Branches</a></li><li><a href="#lifecycle">Lifecycle</a></li></ul></div><div class="col"><h2>Project</h2><ul><li><a href="index.html" aria-current="page">Home</a></li><li><a href="https://github.com/nicenemo/mikmakmuk">Repository</a></li><li><a href="https://github.com/nicenemo/mikmakmuk/tree/main/playbooks">Playbooks</a></li><li><a href="https://github.com/nicenemo/mikmakmuk/tree/main/adr">Decisions (ADR)</a></li><li><a href="https://github.com/nicenemo/mikmakmuk/tree/main/wiki">Wiki</a></li><li><a href="https://github.com/nicenemo/mikmakmuk/blob/main/LICENSE">MIT licence</a></li></ul></div><div class="col"><h2>Ansible playbooks</h2><ul><li><a href="https://hanskruse.eu/kos/">kos</a></li><li><a href="https://hanskruse.eu/mikmakmuk/" aria-current="page">Mik Mak Muk</a></li><li><a href="https://hanskruse.eu/multiberry/">multiberry</a></li><li><a href="https://hanskruse.eu/samos/">samos</a></li></ul></div><div class="col"><h2>More</h2><ul><li><a href="https://hanskruse.eu/nachtgespenst/">Nachtgespenst</a></li><li><a href="https://hanskruse.eu">hanskruse.eu</a></li></ul></div></div></details></div></nav>
+<header class="hero"><div class="wrap">
+<h1>Mik Mak Muk</h1>
+<p class="tag">A 160 GB bare-metal CachyOS homelab cluster built on three HP Mini PCs. No heavy hypervisors, no cloud lock-in—just Ansible, custom kernel tuning, zero-touch enterprise PKI, and physical hardware hacks.</p>
+<p class="btns"><a href="https://github.com/nicenemo/mikmakmuk">Repository</a><a class="alt" href="https://github.com/nicenemo/mikmakmuk/tree/elastic-direct">elastic-direct branch</a><a class="alt home" href="https://hanskruse.eu">hanskruse.eu</a></p>
+</div></header>
+<main class="wrap">
       <!-- EXECUTIVE SUMMARY / INTRO -->
       <section>
         <p>
@@ -319,7 +202,7 @@
       </section>
 
       <!-- HARDWARE TOPOLOGY -->
-      <section>
+      <section id="topology">
         <h2>Cluster Topology (160 GB RAM Total)</h2>
         <table class="hardware-table">
           <thead>
@@ -844,7 +727,7 @@
       <!-- END BENCHMARK RESULTS (managed by playbooks/benchmark-update-index.yml) -->
 
       <!-- UNORTHODOX ENGINEERING & DESIGN CHOICES -->
-      <section>
+      <section id="design">
         <h2>Design Choices</h2>
         <p>Building on compact 8th-Gen mini-PC chassis comes with real hardware limits.:</p>
 
@@ -895,7 +778,7 @@
       </section>
 
       <!-- FUNNY STORIES FROM THE BLOG -->
-      <section>
+      <section id="lab">
         <h2>Tales from the Lab: Lockouts &amp; Vogon PKI</h2>
 
         <div class="funny-note">
@@ -923,7 +806,7 @@
       </section>
 
       <!-- BRANCH COMPARISON & TECHNICAL HIGHLIGHTS -->
-      <section>
+      <section id="branches">
         <h2>Repository Branch Breakdown</h2>
         <div class="grid-two">
           <div class="card">
@@ -950,7 +833,7 @@
       </section>
 
       <!-- SINGLE COMMAND LIFECYCLE -->
-      <section>
+      <section id="lifecycle">
         <h2>Declarative Lifecycle Execution</h2>
         <p>Management is clean, simple, and 100% idempotent:</p>
         <ul style="list-style-type: square; padding-left: 1.25rem; font-size: 0.95rem; color: var(--text-muted);">
@@ -979,11 +862,8 @@
         </div>
       </section>
     </main>
-
-    <footer>
-      <p>MIT licence. &copy; 2026 <a href="https://hanskruse.eu">Hans Kruse</a></p>
-    </footer>
-  </div>
-
+<footer><div class="wrap">
+  <p>MIT licence. &copy; 2026 <a href="https://hanskruse.eu">Hans Kruse</a></p>
+</div></footer>
 </body>
 </html>

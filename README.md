@@ -216,6 +216,7 @@ the hooks refuse to run without them). Scan the whole history with `gitleaks git
 
 ## Project page and licence
 
-`index.html` is the project page, published with GitHub Pages by `.github/workflows/static.yml` (only that file is
-deployed, not the playbooks). The page layout, workflow and licence are the same in all the playbook repositories
-(kos, mikmakmuk, multiberry, samos). Released under the [MIT License](./LICENSE), (c) 2026 Hans Kruse.
+`index.html` is the project page, published with GitHub Pages by `.github/workflows/static.yml` (only the page files
+`index.html`, `style.css`, `menu.js`, `hero-bg.svg` and `favicon.svg` are deployed, not the playbooks). The layout (bar with
+menu, wave banner with a `hanskruse.eu` button, footer), the shared files, the workflow and the licence are the same in
+all the playbook repositories (kos, mikmakmuk, multiberry, samos). Released under the [MIT License](./LICENSE), (c) 2026 Hans Kruse.

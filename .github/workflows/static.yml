@@ -34,8 +34,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Stage the site (only index.html is published, not the playbooks)
-        run: mkdir _site && cp index.html _site/
+      - name: Stage the site (only the page files are published, not the playbooks)
+        run: mkdir _site && cp index.html style.css menu.js hero-bg.svg favicon.svg _site/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
