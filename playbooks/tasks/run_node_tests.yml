@@ -33,7 +33,7 @@
       settings:
         number_of_shards: 3
         number_of_replicas: 1
-        refresh_interval: "1s"
+        refresh_interval: '1s'
     status_code: [200]
   run_once: true
 
@@ -82,7 +82,7 @@
       settings:
         number_of_shards: 3
         number_of_replicas: 1
-        refresh_interval: "10s"
+        refresh_interval: '10s'
     status_code: [200]
   run_once: true
 
@@ -131,7 +131,7 @@
       settings:
         number_of_shards: 3
         number_of_replicas: 1
-        refresh_interval: "30s"
+        refresh_interval: '30s'
     status_code: [200]
   run_once: true
 
@@ -180,7 +180,7 @@
       settings:
         number_of_shards: 3
         number_of_replicas: 1
-        refresh_interval: "30s"
+        refresh_interval: '30s'
     status_code: [200]
   run_once: true
 
@@ -205,9 +205,11 @@
 # -----------------------------------------------------------------------------
 # AGGREGATE RESULTS TO PRIMARY HOST (mik)
 # -----------------------------------------------------------------------------
-- name: "Share {{ target_node }} results to primary host"
+- name: "Share results to primary host for {{ target_node }}"
   ansible.builtin.set_fact:
-    matrix_results: "{{ hostvars[groups['cluster_nodes'][0]]['matrix_results'] | default({}) | combine({target_node: node_results}) }}"
+    matrix_results: >-
+      {{ hostvars[groups['cluster_nodes'][0]]['matrix_results'] | default({}) | combine({target_node: node_results})
+      }}
   delegate_to: "{{ groups['cluster_nodes'][0] }}"
   delegate_facts: true
   when: inventory_hostname == target_node

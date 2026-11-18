@@ -1,11 +1,11 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: "Check NVMe PCIe Negotiated Link Speed & Lane Width"
+- name: 'Check NVMe PCIe Negotiated Link Speed & Lane Width'
   hosts: cluster_nodes
   become: true
 
   tasks:
-    - name: "Ensure pciutils, nvme-cli, and jq are present"
+    - name: 'Ensure pciutils, nvme-cli, and jq are present'
       community.general.pacman:
         name:
           - pciutils
@@ -14,37 +14,53 @@
         state: present
         update_cache: true
 
-    - name: "Discover primary NVMe device node"
+    - name: 'Discover primary NVMe device node'
       ansible.builtin.shell:
-        cmd: "ls /dev/nvme0n1 /dev/nvme0 2>/dev/null | head -n1 || echo '/dev/nvme0'"
+        cmd: "set -o pipefail; ls /dev/nvme0n1 /dev/nvme0 2>/dev/null | head -n1 || echo '/dev/nvme0'"
+        executable: /bin/bash
       register: nvme_dev_raw
       changed_when: false
 
-    - name: "Discover PCIe BDF address for NVMe device"
+    - name: 'Discover PCIe BDF address for NVMe device'
       ansible.builtin.shell:
-        cmd: "readlink -f /sys/class/nvme/nvme0/device 2>/dev/null | awk -F'/' '{print $NF}' || echo 'N/A'"
+        cmd: >-
+          set -o pipefail; readlink -f /sys/class/nvme/nvme0/device 2>/dev/null | awk -F'/' '{print $NF}' || echo
+          'N/A'
+        executable: /bin/bash
       register: pcie_bdf_raw
       changed_when: false
 
-    - name: "Query NVMe Drive Model"
+    - name: 'Query NVMe Drive Model'
       ansible.builtin.shell:
-        cmd: "nvme id-ctrl {{ nvme_dev_raw.stdout }} -o json 2>/dev/null | jq -r '.mn // \"Unknown\"' | tr -d '\"' || echo 'Unknown NVMe'"
+        cmd: >-
+          set -o pipefail;
+          nvme id-ctrl {{ nvme_dev_raw.stdout }} -o json 2>/dev/null | jq -r '.mn // "Unknown"' | tr -d '"' || echo
+          'Unknown NVMe'
+        executable: /bin/bash
       register: nvme_model_raw
       changed_when: false
 
-    - name: "Query PCI Link Capabilities"
+    - name: 'Query PCI Link Capabilities'
       ansible.builtin.shell:
-        cmd: "lspci -s {{ pcie_bdf_raw.stdout }} -vv 2>/dev/null | grep -i 'LnkCap:' | head -n1 | sed -e 's/^[ \t]*//' | tr -d '\t\r' || echo 'N/A'"
+        cmd: >-
+          set -o pipefail;
+          lspci -s {{ pcie_bdf_raw.stdout }} -vv 2>/dev/null | grep -i 'LnkCap:' | head -n1
+          | sed -e 's/^[ \t]*//' | tr -d '\t\r' || echo 'N/A'
+        executable: /bin/bash
       register: pcie_lnkcap_raw
       changed_when: false
 
-    - name: "Query PCI Link Status"
+    - name: 'Query PCI Link Status'
       ansible.builtin.shell:
-        cmd: "lspci -s {{ pcie_bdf_raw.stdout }} -vv 2>/dev/null | grep -i 'LnkSta:' | head -n1 | sed -e 's/^[ \t]*//' | tr -d '\t\r' || echo 'N/A'"
+        cmd: >-
+          set -o pipefail;
+          lspci -s {{ pcie_bdf_raw.stdout }} -vv 2>/dev/null | grep -i 'LnkSta:' | head -n1
+          | sed -e 's/^[ \t]*//' | tr -d '\t\r' || echo 'N/A'
+        executable: /bin/bash
       register: pcie_lnksta_raw
       changed_when: false
 
-    - name: "Store PCIe Link Facts"
+    - name: 'Store PCIe Link Facts'
       ansible.builtin.set_fact:
         node_pcie_metrics:
           nvme_dev: "{{ nvme_dev_raw.stdout | trim }}"
@@ -52,7 +68,8 @@
           lnk_cap: "{{ pcie_lnkcap_raw.stdout | trim }}"
           lnk_sta: "{{ pcie_lnksta_raw.stdout | trim }}"
 
-    - name: "Display PCIe Link Status Summary"
+    - name: 'Display PCIe Link Status Summary'
       ansible.builtin.debug:
-        msg: "{{ lookup('ansible.builtin.template', playbook_dir ~ '/../templates/pcie_speed_report.j2').splitlines() }}"
+        msg: >-
+          {{ lookup('ansible.builtin.template', playbook_dir ~ '/../templates/pcie_speed_report.j2').splitlines() }}
       run_once: true

@@ -8,7 +8,7 @@
   vars:
     igpu_gpu_env:
       MESA_LOADER_DRIVER_OVERRIDE: iris
-      LIBGL_ALWAYS_SOFTWARE: "0"
+      LIBGL_ALWAYS_SOFTWARE: '0'
       RUSTICL_ENABLE: iris
     igpu_weston_unit: mikmakmuk-benchmark-weston
     igpu_wayland_env:
@@ -38,7 +38,7 @@
     - name: Refresh node clock facts
       ansible.builtin.setup:
         gather_subset:
-          - "!all"
+          - '!all'
           - date_time
 
     - name: Record benchmark start time
@@ -103,7 +103,7 @@
             dest: "/run/systemd/system/{{ igpu_weston_unit }}.service"
             owner: root
             group: root
-            mode: "0644"
+            mode: '0644'
           register: igpu_weston_unit_file
 
         - name: Start headless Weston compositor

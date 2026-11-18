@@ -5,7 +5,9 @@
   become: true
   vars:
     project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
-    es_elastic_password: "{{ lookup('ansible.builtin.password', project_root ~ '/credentials/elastic_password.txt length=24 chars=ascii_letters,digits') }}"
+    es_elastic_password: >-
+      {{ lookup('ansible.builtin.password', project_root ~ '/credentials/elastic_password.txt length=24
+      chars=ascii_letters,digits') }}
 
   tasks:
     - name: End play for nodes without the elasticsearch_node role
@@ -31,7 +33,7 @@
         port: '9200'
         proto: tcp
         from_ip: "{{ elasticsearch_ip.split('.')[0:3] | join('.') }}.0/24"
-        comment: "ES REST API on management LAN"
+        comment: 'ES REST API on management LAN'
 
     - name: Enable UFW state
       community.general.ufw:
@@ -134,14 +136,18 @@
 
     - name: Set elastic user password on cluster
       ansible.builtin.shell: >
+        set -o pipefail;
         printf "%s\n%s\n" "{{ es_elastic_password }}" "{{ es_elastic_password }}" |
         /usr/share/elasticsearch/bin/elasticsearch-reset-password
         --username elastic
         --url "https://{{ elasticsearch_ip }}:9200"
         --interactive
         --batch
+      args:
+        executable: /bin/bash
       when: es_auth_check.status is not defined or es_auth_check.status == 401
       run_once: true
+      changed_when: true
 
     - name: Verify Elasticsearch cluster health endpoint over management network
       ansible.builtin.uri:
@@ -163,7 +169,7 @@
     - name: Display cluster health and connection summary
       ansible.builtin.debug:
         msg:
-          - "=========================================================="
+          - '=========================================================='
           - "Elasticsearch Node {{ inventory_hostname }} is HEALTHY!"
           - "REST API IP: {{ elasticsearch_ip }}"
           - "Transport Cluster IP: {{ cluster_ip }}"
@@ -173,9 +179,9 @@
           - "Elasticsearch 'elastic' user password:"
           - "  {{ es_elastic_password }}"
           - ""
-          - "Test command over management network:"
+          - 'Test command over management network:'
           - "  curl -k -u elastic:{{ es_elastic_password }} https://{{ elasticsearch_ip }}:9200/_cluster/health?pretty"
-          - "=========================================================="
+          - '=========================================================='
 
   handlers:
     - name: Restart Elasticsearch

@@ -16,7 +16,7 @@
       ansible.builtin.template:
         src: "{{ project_root }}/templates/benchmark_report.md.j2"
         dest: "{{ benchmark_report_path }}"
-        mode: "0644"
+        mode: '0644'
 
     - name: Show report location
       ansible.builtin.debug:

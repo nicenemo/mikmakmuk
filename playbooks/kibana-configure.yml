@@ -6,7 +6,9 @@
   vars:
     project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
     es_elastic_password: "{{ lookup('ansible.builtin.file', project_root ~ '/credentials/elastic_password.txt') }}"
-    kibana_encryption_key: "{{ lookup('ansible.builtin.password', project_root ~ '/credentials/kibana_encryption_key.txt length=32 chars=ascii_letters,digits') }}"
+    kibana_encryption_key: >-
+      {{ lookup('ansible.builtin.password', project_root ~ '/credentials/kibana_encryption_key.txt length=32
+      chars=ascii_letters,digits') }}
 
   tasks:
     - name: End play for nodes without the kibana_node role
@@ -28,7 +30,7 @@
         port: '5601'
         proto: tcp
         from_ip: "{{ (kibana_ip | default(ansible_host)).split('.')[0:3] | join('.') }}.0/24"
-        comment: "Kibana Web UI on management LAN"
+        comment: 'Kibana Web UI on management LAN'
 
     - name: Enable UFW state
       community.general.ufw:
@@ -50,7 +52,10 @@
 
     - name: Create Kibana service account token via Elasticsearch REST API
       ansible.builtin.uri:
-        url: "https://{{ hostvars[es_control_host]['elasticsearch_ip'] | default(hostvars[es_control_host]['ansible_host']) }}:9200/_security/service/elastic/kibana/credential/token/kibana-ansible-token"
+        url: >-
+          https://{{ hostvars[es_control_host]['elasticsearch_ip'] |
+          default(hostvars[es_control_host]['ansible_host'])
+          }}:9200/_security/service/elastic/kibana/credential/token/kibana-ansible-token
         method: POST
         user: elastic
         password: "{{ es_elastic_password }}"
@@ -74,7 +79,8 @@
 
     - name: Load service account token from local credentials file
       ansible.builtin.set_fact:
-        kibana_service_token: "{{ lookup('ansible.builtin.file', project_root ~ '/credentials/kibana_service_token.txt') | trim }}"
+        kibana_service_token: >-
+          {{ lookup('ansible.builtin.file', project_root ~ '/credentials/kibana_service_token.txt') | trim }}
 
     - name: Ensure Kibana directories exist with correct permissions
       ansible.builtin.file:
@@ -162,16 +168,16 @@
     - name: Display Kibana URL & login credentials
       ansible.builtin.debug:
         msg:
-          - "=========================================================="
+          - '=========================================================='
           - "Kibana Node {{ inventory_hostname }} is HEALTHY!"
           - "URL: https://{{ kibana_ip | default(ansible_host) }}:5601"
           - ""
-          - "Login Username: elastic"
+          - 'Login Username: elastic'
           - "Login Password: {{ es_elastic_password }}"
           - ""
-          - "Status endpoint test command:"
+          - 'Status endpoint test command:'
           - "  curl -k https://{{ kibana_ip | default(ansible_host) }}:5601/api/status"
-          - "=========================================================="
+          - '=========================================================='
 
   handlers:
     - name: Restart Kibana

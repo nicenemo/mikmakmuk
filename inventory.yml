@@ -5,7 +5,7 @@ all:
     ansible_management_user: myansibleuser
     ansible_user: "{{ ansible_management_user }}"
     ansible_python_interpreter: /usr/bin/python3
-    cluster_connection_name: "cluster-vlan107"
+    cluster_connection_name: 'cluster-vlan107'
     common_packages:
       - neovim
       - tmux
@@ -25,11 +25,11 @@ all:
     # (see playbooks/vars/benchmark.yml) and removed by base-teardown.yml.
     ca_valid_days: 3650
     leaf_valid_days: 200
-    cert_organization: "Vogon Deep-Space Avian & DTN Transit Board (RFC 1149 / RFC 9171)"
+    cert_organization: 'Vogon Deep-Space Avian & DTN Transit Board (RFC 1149 / RFC 9171)'
     cert_organizational_unit: >-
       Office for Directing DTN Bundle Custody Transfers of WireGuard-over-BLE HID Service 0x1812 Page 0x20 (HUD)
       over hid-ebpf to the Outer Rim
-    cert_root_ca_cn: "B.I.R.D. (BIRD Interstellar Recursive Defenestration) Root CA"
+    cert_root_ca_cn: 'B.I.R.D. (BIRD Interstellar Recursive Defenestration) Root CA'
     elk_version: 9.5.6
 
     es_heap_size_gb: >-
@@ -44,7 +44,7 @@ all:
           ansible_host: 192.168.105.2
           ram_gb: 32
           cpu_type: 8500
-          btrfs_mount_opts: "noatime,compress-force=zstd:1,space_cache=v2"
+          btrfs_mount_opts: 'noatime,compress-force=zstd:1,space_cache=v2'
           node_packages:
             - rsync
             - tree
@@ -60,7 +60,7 @@ all:
           ansible_host: 192.168.105.3
           ram_gb: 64
           cpu_type: 8500T
-          btrfs_mount_opts: "noatime,compress=zstd:1,commit=15,space_cache=v2"
+          btrfs_mount_opts: 'noatime,compress=zstd:1,commit=15,space_cache=v2'
           node_packages:
             - htop
             - ncdu
@@ -81,7 +81,7 @@ all:
           ansible_host: 192.168.105.4
           ram_gb: 64
           cpu_type: 8500T
-          btrfs_mount_opts: "noatime,compress=zstd:3,space_cache=v2"
+          btrfs_mount_opts: 'noatime,compress=zstd:3,space_cache=v2'
           node_packages:
             - iotop
             - duf

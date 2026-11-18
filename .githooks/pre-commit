@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Pre-commit hook: scan staged changes for secrets (gitleaks), then lint. Enable with: ./githooks-setup.sh
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+    echo "pre-commit: gitleaks is not installed (sudo pacman -S gitleaks); refusing to commit unscanned." >&2
+    exit 1
+fi
+
+gitleaks git --staged --redact --no-banner --verbose
+
+yamllint . >/dev/null
+
+if ! command -v ansible-lint >/dev/null 2>&1; then
+    echo "pre-commit: ansible-lint is not installed (sudo pacman -S ansible-lint); refusing to commit unlinted." >&2
+    exit 1
+fi
+
+ansible-lint -q . >/dev/null </dev/null

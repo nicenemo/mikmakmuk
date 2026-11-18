@@ -23,7 +23,7 @@
     # -------------------------------------------------------------------------
     - name: Check if Kibana is already installed on host
       ansible.builtin.command:
-        cmd: "pacman -Q kibana"
+        cmd: 'pacman -Q kibana'
       register: pacman_check
       failed_when: false
       changed_when: false

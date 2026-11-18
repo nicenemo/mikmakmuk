@@ -4,7 +4,7 @@
 config:
   # MD004: Unordered list style (consistent asterisks)
   MD004:
-    style: "asterisk"
+    style: 'asterisk'
 
   # MD013: Line length (enforce 120 chars to match Prettier)
   MD013:
@@ -19,14 +19,15 @@ config:
 
   # MD029: Ordered list item prefix - Allow 1. 1. 1. or sequential
   MD029:
-    style: "one_or_ordered"
+    style: 'one_or_ordered'
 
   # MD033: Inline HTML - Disabled (allows raw HTML tags if needed)
   MD033: false
 
 # Ignore files/directories
 ignores:
-  - ".git/"
-  - ".ansible/"
-  - "node_modules/"
-  - "playbooks/"
+  - '.git/'
+  - '.ansible/'
+  - 'build/'
+  - 'node_modules/'
+  - 'playbooks/'

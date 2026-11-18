@@ -6,7 +6,7 @@
   vars:
     project_root: "{{ playbook_dir | dirname }}"
     tuning_tokens: "{{ (lookup('ansible.builtin.file', project_root ~ '/files/homelab-tuning.conf') | trim).split() }}"
-    limine_default_entry: "CachyOS/linux-cachyos"
+    limine_default_entry: 'CachyOS/linux-cachyos'
     # Recorded by kernel-setup.yml; absent on nodes provisioned by older versions.
     kernel_state: "{{ ansible_local['mikmakmuk_kernel'] | default({}) }}"
     boot_time_files:
@@ -27,7 +27,7 @@
         state: directory
         owner: root
         group: root
-        mode: "0700"
+        mode: '0700'
 
     # -------------------------------------------------------------------------
     # 2. Remove CPU Performance Service, Sysctl & Module Drop-Ins
@@ -76,7 +76,7 @@
     - name: Restore original BOOT_ORDER
       ansible.builtin.lineinfile:
         path: /etc/default/limine
-        regexp: "^BOOT_ORDER=.*"
+        regexp: '^BOOT_ORDER=.*'
         line: "{{ kernel_state['boot_order'] }}"
       when: kernel_state['boot_order'] | default(none) is string
       register: limine_order_restored
@@ -84,7 +84,7 @@
     - name: Remove BOOT_ORDER that did not exist before setup
       ansible.builtin.lineinfile:
         path: /etc/default/limine
-        regexp: "^BOOT_ORDER=.*"
+        regexp: '^BOOT_ORDER=.*'
         state: absent
       when: "'boot_order' in kernel_state and kernel_state['boot_order'] is none"
       register: limine_order_removed
@@ -126,7 +126,7 @@
       ansible.builtin.replace:
         path: /boot/limine.conf
         regexp: '^\s*remember_last_entry\s*:\s*.*$'
-        replace: "remember_last_entry: no"
+        replace: 'remember_last_entry: no'
       when: requires_reboot | bool
 
     - name: Ensure default_entry is explicitly set in /boot/limine.conf after regeneration
@@ -134,7 +134,7 @@
         path: /boot/limine.conf
         regexp: '^\s*default_entry\s*:.*$'
         line: "default_entry: {{ limine_default_entry }}"
-        insertafter: "^timeout:"
+        insertafter: '^timeout:'
         state: present
       when: requires_reboot | bool
 
@@ -143,7 +143,7 @@
     # -------------------------------------------------------------------------
     - name: Reboot node into clean default kernel state
       ansible.builtin.reboot:
-        msg: "Rebooting automatically to apply default Limine kernel parameters"
+        msg: 'Rebooting automatically to apply default Limine kernel parameters'
         connect_timeout: 10
         reboot_timeout: 300
         pre_reboot_delay: 2
@@ -163,7 +163,7 @@
         fail_msg: >-
           Teardown failed, still active in /proc/cmdline:
           {{ tuning_tokens | intersect((live_cmdline_raw.content | b64decode).split()) | join(' ') }}
-        success_msg: "Verified no tuning parameters remain in /proc/cmdline"
+        success_msg: 'Verified no tuning parameters remain in /proc/cmdline'
 
     # The reboot above drops the performance governor; confirm the recorded one is back.
     - name: Read active CPU governor and EPP

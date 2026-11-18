@@ -10,7 +10,7 @@
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode: '0755'
 
 - name: "Record pre-setup state for teardown in {{ local_state_name }}"
   ansible.builtin.copy:
@@ -18,5 +18,5 @@
     dest: "/etc/ansible/facts.d/mikmakmuk_{{ local_state_name }}.fact"
     owner: root
     group: root
-    mode: "0644"
+    mode: '0644'
     force: "{{ local_state_force | default(false) }}"

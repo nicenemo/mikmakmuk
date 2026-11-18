@@ -70,7 +70,7 @@
     - name: Refresh network interface facts
       ansible.builtin.setup:
         gather_subset:
-          - "!all"
+          - '!all'
           - network
 
     - name: Verify cluster interface is up with its static IP and jumbo frames
@@ -96,11 +96,11 @@
     - name: Display cluster network verification summary
       ansible.builtin.debug:
         msg:
-          - "=========================================================="
+          - '=========================================================='
           - "SUCCESS: {{ inventory_hostname }} cluster network verified!"
           - "Interface: {{ discovered_usb_iface }}"
           - "Assigned IP: {{ cluster_ip }}/24 (MTU 9000)"
           - "Profile '{{ cluster_connection_name }}' ACTIVE"
-          - "Physical Link State: UP (MTU 9000 verified)"
+          - 'Physical Link State: UP (MTU 9000 verified)'
           - "Negotiated Link Speed: {{ negotiated_link_speed }}"
-          - "=========================================================="
+          - '=========================================================='

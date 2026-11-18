@@ -9,7 +9,7 @@
   tasks:
     - name: Reboot node cleanly and wait for return
       ansible.builtin.reboot:
-        msg: "Rebooting node via Ansible"
+        msg: 'Rebooting node via Ansible'
         connect_timeout: 5
         reboot_timeout: 300
         pre_reboot_delay: 0

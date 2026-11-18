@@ -5,7 +5,7 @@
 - name: Find benchmark result files on controller
   ansible.builtin.find:
     paths: "{{ benchmark_results_dir }}"
-    patterns: "*.json"
+    patterns: '*.json'
     recurse: true
   register: benchmark_result_files
 

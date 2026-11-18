@@ -14,7 +14,7 @@
     full_load_cpu_unit: mikmakmuk-benchmark-stress-ng
   environment:
     MESA_LOADER_DRIVER_OVERRIDE: iris
-    LIBGL_ALWAYS_SOFTWARE: "0"
+    LIBGL_ALWAYS_SOFTWARE: '0'
     RUSTICL_ENABLE: iris
 
   tasks:
@@ -36,7 +36,7 @@
     - name: Refresh node clock facts
       ansible.builtin.setup:
         gather_subset:
-          - "!all"
+          - '!all'
           - date_time
 
     - name: Record benchmark start time
@@ -66,7 +66,7 @@
             dest: "/run/systemd/system/{{ full_load_cpu_unit }}.service"
             owner: root
             group: root
-            mode: "0644"
+            mode: '0644'
           register: full_load_cpu_unit_file
 
         - name: Start all-core stress-ng load in the background

@@ -44,12 +44,18 @@ add `localhost` to the limit).
 ## Linting
 
 ```bash
-ansible-lint
+ansible-lint -q . </dev/null    # production profile (.ansible-lint); without a path and </dev/null it reads stdin and hangs
 yamllint .                       # config: .yamllint (120 cols, ansible-lint compatible)
 markdownlint-cli2 "**/*.md"     # config: .markdownlint-cli2.yaml (ignores playbooks/, asterisk lists, 120 cols)
 editorconfig-checker
 prettier --check .
 ```
+
+Secrets and lint: the tracked `pre-commit` hook (`.githooks/`, enable with `./githooks-setup.sh`) runs
+`gitleaks git --staged`, `yamllint` and `ansible-lint`; `.githooks/pre-push` runs `trufflehog`. Never bypass with
+`--no-verify`. YAML quotes: single quotes for strings without templating (`mode: '0644'`), double quotes only when the
+value contains Jinja (`{{ }}`, `{% %}`) or a single quote. The same lint configuration, hooks and quote rule are used in
+kos, samos and multiberry.
 
 There are no tests and no CI; verification is running against the nodes (teardown → setup cycle is the idempotency
 test). The GitHub Pages site (`index.html`) and its benchmark publishing playbook live on `main` only.

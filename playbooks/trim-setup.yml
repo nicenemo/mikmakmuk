@@ -1,6 +1,6 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: "Smart Cluster-Wide Storage Maintenance & TRIM Setup"
+- name: 'Smart Cluster-Wide Storage Maintenance & TRIM Setup'
   hosts: cluster_nodes
   become: true
   vars:
@@ -53,7 +53,7 @@
       ansible.builtin.file:
         path: /etc/systemd/system/fstrim.service.d
         state: directory
-        mode: "0755"
+        mode: '0755'
 
     - name: Deploy smart override for weekly fstrim service
       ansible.builtin.copy:
@@ -62,7 +62,7 @@
           [Service]
           ExecStart=
           ExecStart=/usr/bin/fstrim -v -m 8M /
-        mode: "0644"
+        mode: '0644'
       notify: Reload systemd
 
     - name: Apply systemd unit changes
@@ -81,7 +81,7 @@
     - name: Store verified node TRIM facts
       ansible.builtin.set_fact:
         node_trim_metrics:
-          target_mount: "/"
+          target_mount: '/'
           applied_threshold: "{{ calculated_min_trim }}"
           trim_output: "{{ fstrim_out.stdout | trim }}"
           timer_pre_status: "{{ timer_pre_check.status.ActiveState | capitalize }}"

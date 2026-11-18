@@ -1,8 +1,9 @@
 # Network locked out
 
-If you broke the network configuration with the ansible playbooks or otherwise, the following snippets provide suggestions on how to get a connection again so that you can restore your network via playboos again.
+If you broke the network configuration with the ansible playbooks or otherwise, the following snippets provide
+suggestions on how to get a connection again so that you can restore your network via playboos again.
 
-## If you want to see all devices 
+## If you want to see all devices
 
 Run `ip -br link` to get a simple table of interface names:
 
@@ -11,8 +12,8 @@ ip -br link
 
 ```
 
-Look for state **UP** or **UNKNOWN** next to your physical card (ignoring `lo`), then use that interface name in place of `$IFACE`.
-
+Look for state **UP** or **UNKNOWN** next to your physical card (ignoring `lo`), then use that interface name in place
+of `$IFACE`.
 
 ## Details including MAC adresses
 
@@ -21,7 +22,6 @@ If you need full details (MAC address, state, and flags):
 ```bash
 ip link
 ```
-
 
 ## Fixing
 

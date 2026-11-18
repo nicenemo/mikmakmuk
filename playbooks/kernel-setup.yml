@@ -7,7 +7,7 @@
     project_root: "{{ playbook_dir | dirname }}"
     tuning_tokens: "{{ (lookup('ansible.builtin.file', project_root ~ '/files/homelab-tuning.conf') | trim).split() }}"
     limine_boot_order: 'BOOT_ORDER="*cachyos, *, *lts, *fallback, Snapshots"'
-    limine_default_entry: "CachyOS/linux-cachyos"
+    limine_default_entry: 'CachyOS/linux-cachyos'
     # Single source for sysctl tuning: "key = value" lines in files/99-homelab-performance.conf
     homelab_sysctl: >-
       {{ lookup('ansible.builtin.file', project_root ~ '/files/99-homelab-performance.conf').splitlines()
@@ -29,7 +29,7 @@
         state: directory
         owner: root
         group: root
-        mode: "0700"
+        mode: '0700'
 
     # -------------------------------------------------------------------------
     # 2. Inspect Current Bootloader, Kernel & Power State
@@ -103,10 +103,10 @@
     - name: Ensure BOOT_ORDER prioritizes main CachyOS kernel
       ansible.builtin.lineinfile:
         path: /etc/default/limine
-        regexp: "^BOOT_ORDER=.*"
+        regexp: '^BOOT_ORDER=.*'
         line: "{{ limine_boot_order }}"
         create: true
-        mode: "0644"
+        mode: '0644'
       register: limine_order_updated
 
     - name: Determine if bootloader regeneration and reboot are required
@@ -136,7 +136,7 @@
       ansible.builtin.replace:
         path: /boot/limine.conf
         regexp: '^\s*remember_last_entry\s*:\s*.*$'
-        replace: "remember_last_entry: no"
+        replace: 'remember_last_entry: no'
       when: requires_reboot | bool
 
     - name: Ensure default_entry is explicitly set in /boot/limine.conf after regeneration
@@ -144,7 +144,7 @@
         path: /boot/limine.conf
         regexp: '^\s*default_entry\s*:.*$'
         line: "default_entry: {{ limine_default_entry }}"
-        insertafter: "^timeout:"
+        insertafter: '^timeout:'
         state: present
       when: requires_reboot | bool
 
@@ -157,7 +157,7 @@
         dest: /etc/tmpfiles.d/homelab-cpu-performance.conf
         owner: root
         group: root
-        mode: "0644"
+        mode: '0644'
       notify: Apply CPU performance governor
 
     - name: Apply sysctl performance settings
@@ -177,7 +177,7 @@
         dest: /etc/modules-load.d/igpu.conf
         owner: root
         group: root
-        mode: "0644"
+        mode: '0644'
 
     - name: Load i915 kernel module
       community.general.modprobe:
@@ -192,7 +192,7 @@
     # -------------------------------------------------------------------------
     - name: Reboot system into new optimized kernel
       ansible.builtin.reboot:
-        msg: "Rebooting automatically to apply Limine performance parameters into /proc/cmdline"
+        msg: 'Rebooting automatically to apply Limine performance parameters into /proc/cmdline'
         connect_timeout: 10
         reboot_timeout: 300
         pre_reboot_delay: 2
@@ -208,7 +208,7 @@
     - name: Refresh running kernel facts
       ansible.builtin.setup:
         gather_subset:
-          - "!all"
+          - '!all'
           - platform
 
     - name: Verify running kernel is linux-cachyos

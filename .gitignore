@@ -47,7 +47,6 @@ Thumbs.db
 .ansible/
 *.retry
 *.log
-.ansible-lint
 
 # Ansible Galaxy Installed Roles & Collections
 roles/external/

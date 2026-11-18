@@ -29,7 +29,7 @@ benchmark_tool_packages:
     - iperf3
 
 # Kernel log patterns that indicate thermal or power-limit throttling.
-benchmark_throttle_pattern: "(throttl|downclock|overtemp|pkg_power_limit|power limit|prochot|thermtrip)"
+benchmark_throttle_pattern: '(throttl|downclock|overtemp|pkg_power_limit|power limit|prochot|thermtrip)'
 
 # -----------------------------------------------------------------------------
 # Report layout for the Markdown report.

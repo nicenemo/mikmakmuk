@@ -1,11 +1,11 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: "Safely Update Btrfs Mount Options in /etc/fstab (CachyOS)"
+- name: 'Safely Update Btrfs Mount Options in /etc/fstab (CachyOS)'
   hosts: cluster_nodes
   become: true
   vars:
     # Default fallback options if node variable is omitted
-    default_btrfs_mount_opts: "noatime,compress=zstd:1,space_cache=v2"
+    default_btrfs_mount_opts: 'noatime,compress=zstd:1,space_cache=v2'
 
   tasks:
     # -------------------------------------------------------------------------
@@ -43,13 +43,13 @@
     # 3. Validation
     # -------------------------------------------------------------------------
     - name: Verify /etc/fstab syntax with findmnt
-      ansible.builtin.command: "findmnt --verify --verbose"
+      ansible.builtin.command: 'findmnt --verify --verbose'
       changed_when: false
 
     - name: Refresh mount facts
       ansible.builtin.setup:
         gather_subset:
-          - "!all"
+          - '!all'
           - mounts
 
     - name: Display updated active mount configuration

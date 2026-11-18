@@ -8,8 +8,12 @@
   vars:
     project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
     # Fetches elk_version from inventory.yml (defaults to 9.5.3 if undefined)
-    target_version: "{{ hostvars[groups['cluster_nodes'][0]]['elk_version'] if (groups['cluster_nodes'] is defined and hostvars[groups['cluster_nodes'][0]]['elk_version'] is defined) else '9.5.3' }}"
-    build_user: "{{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['env']['USER'] | default(lookup('ansible.builtin.env', 'USER'))) }}"
+    target_version: >-
+      {{ hostvars[groups['cluster_nodes'][0]]['elk_version'] if (groups['cluster_nodes'] is defined and
+      hostvars[groups['cluster_nodes'][0]]['elk_version'] is defined) else '9.5.3' }}
+    build_user: >-
+      {{ ansible_facts['env']['SUDO_USER'] | default(ansible_facts['env']['USER'] |
+      default(lookup('ansible.builtin.env', 'USER'))) }}
 
   tasks:
     - name: Set resolved version fact
@@ -58,17 +62,20 @@
       ansible.builtin.copy:
         src: "{{ build_dir }}/elasticsearch-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
         dest: "{{ pkg_build_dir }}/elasticsearch-{{ resolved_elk_version }}-linux-x86_64.tar.gz"
+        mode: '0644'
       when: not local_pkg_stat.stat.exists
 
     - name: Build CachyOS package using makepkg as unprivileged user
       ansible.builtin.command:
-        cmd: "makepkg -f --nodeps"
+        cmd: 'makepkg -f --nodeps'
         chdir: "{{ pkg_build_dir }}"
       become: true
       become_user: "{{ build_user }}"
+      changed_when: true
       when: not local_pkg_stat.stat.exists
 
     - name: Move built package to root build folder
       ansible.builtin.command:
         cmd: "mv {{ pkg_build_dir }}/{{ pkg_file_name }} {{ build_dir }}/{{ pkg_file_name }}"
+      changed_when: true
       when: not local_pkg_stat.stat.exists

@@ -4,7 +4,8 @@
     node_ips: >-
       {{
         [hostvars[node_name]['ansible_host']] +
-        ([hostvars[node_name]['elasticsearch_ip'].split('/')[0]] if hostvars[node_name]['elasticsearch_ip'] is defined else []) +
+        ([hostvars[node_name]['elasticsearch_ip'].split('/')[0]]
+         if hostvars[node_name]['elasticsearch_ip'] is defined else []) +
         ([hostvars[node_name]['kibana_ip'].split('/')[0]] if hostvars[node_name]['kibana_ip'] is defined else [])
       }}
 
@@ -21,7 +22,10 @@
 
 - name: Discover all A, PTR and CNAME DNS names pointing to node IP via local DNS
   ansible.builtin.shell: |
+    set -o pipefail
     dig +noall +answer -x {{ primary_ip }} ANY | awk '{print $5}' | sed 's/\.$//'
+  args:
+    executable: /bin/bash
   register: discovered_dns_raw
   changed_when: false
   failed_when: false
@@ -59,7 +63,7 @@
   ansible.builtin.debug:
     msg: "Gegenereerde SAN-lijst voor {{ node_name }}: {{ node_san_list }}"
 
-- name: Generate Private Key for {{ node_name }} (PKCS#8 for Java/ES)
+- name: Generate PKCS#8 private key (Java/ES) for {{ node_name }}
   community.crypto.openssl_privatekey:
     path: "{{ cert_dir }}/{{ node_name }}.key"
     type: RSA
@@ -73,8 +77,13 @@
   community.crypto.openssl_csr_pipe:
     privatekey_path: "{{ cert_dir }}/{{ node_name }}.key"
     common_name: "{{ node_name }}"
-    organization_name: "{{ cert_organization | default(hostvars['localhost']['cert_organization'] | default('Vogon Interplanetary Delay-Tolerant Network Bureau (RFC 9171)')) }}"
-    organizational_unit_name: "{{ cert_organizational_unit | default(hostvars['localhost']['cert_organizational_unit'] | default('Department of Directing WireGuard-over-BLE HID Service 0x1812 Tunneling via Page 0x20 (HUD) over hid-ebpf via DTN Bundle Store-and-Forward to a Closed Window')) }}"
+    organization_name: >-
+      {{ cert_organization | default(hostvars['localhost']['cert_organization'] | default('Vogon Interplanetary
+      Delay-Tolerant Network Bureau (RFC 9171)')) }}
+    organizational_unit_name: >-
+      {{ cert_organizational_unit | default(hostvars['localhost']['cert_organizational_unit'] | default('Department of
+      Directing WireGuard-over-BLE HID Service 0x1812 Tunneling via Page 0x20 (HUD) over hid-ebpf via DTN Bundle
+      Store-and-Forward to a Closed Window')) }}
     subject_alt_name: "{{ node_san_list }}"
   register: node_csr
 

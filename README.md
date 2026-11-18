@@ -1,8 +1,10 @@
 # The Mik Mak Muk Cluster
 
-This repository provides the baseline Ansible automation for a 3-node HP EliteDesk/ProDesk Mini cluster (`mik`, `mak`, `muk`).
+This repository provides the baseline Ansible automation for a 3-node HP EliteDesk/ProDesk Mini cluster (`mik`, `mak`,
+`muk`).
 
-It manages a **pure hardware and OS base setup** on CachyOS—optimizing kernel parameters, GPU video acceleration, and NVMe power states at the host layer before deploying container or orchestration workloads.
+It manages a **pure hardware and OS base setup** on CachyOS—optimizing kernel parameters, GPU video acceleration, and
+NVMe power states at the host layer before deploying container or orchestration workloads.
 
 ---
 
@@ -14,7 +16,8 @@ It manages a **pure hardware and OS base setup** on CachyOS—optimizing kernel 
 | **mak** | HP ProDesk 600 Mini G4 | Intel i5-8500T (35W) | 32 GB | Worker Node |
 | **muk** | HP ProDesk 400 Mini G4 | Intel i5-8500T (35W) | 16 GB | Worker Node / Ingress |
 
-For physical mounting, storage layout, networking, and hardware design rationales, see the [Architecture Decision Records (ADRs)](./adr/).
+For physical mounting, storage layout, networking, and hardware design rationales, see the [Architecture Decision
+Records (ADRs)](./adr/).
 
 ---
 
@@ -22,21 +25,23 @@ For physical mounting, storage layout, networking, and hardware design rationale
 
 Design choices and hardware constraints are tracked in the [`adr/`](./adr/) directory:
 
-- [ADR 0001: Record Architecture Decisions](./adr/0001-record-architecture-decisions.md)
-- [ADR 0002: Storage Layout & NVMe Boot Strategy](./adr/0002-storage-layout-and-nvme-only-boot.md)
-- [ADR 0003: Under-Desk Sleeve Mounting](./adr/0003-physical-desk-sleeve-mounting.md)
-- [ADR 0004: Ansible Framework Choice](./adr/0004-ansible-for-declarative-agentless-automation.md)
-- [ADR 0005: Decoupling Base OS from Workloads](./adr/0005-separate-scope-for-base-os-and-workload-setup.md)
-- [ADR 0006: Standalone Reboot Operations](./adr/0006-standalone-reboot-operations.md)
-- [ADR 0007: CPU Undervolting & Microcode Lock Handling](./adr/0007-cpu-undervolting-strategy.md)
-- [ADR 0008: Disabling CPU Security Mitigations](./adr/0008-disabling-cpu-security-mitigations.md)
-- [ADR 0009: Requiring Password for Privilege Escalation](./adr/0009-requiring-password-for-privilege-escalation.md)
-- [ADR 0010: Removing Intel Undervolting and Thermald from Project Configuration](./adr/0010-disabling-intel-undervolting-and-thermald.md)
-- [ADR 0011: Selection of CachyOS as the Host Operating System](./adr/0011-Selection-of-CachyOS-as-the-host-operating-system.md)
-- [ADR 0012: Manual Boostrapping with Ventoy](./adr/0012-Manual-bootstrapping-with-Ventoy.md)
-- [ADR 0013: Renaming Hostnames to Mik, Mak, Muk](./adr/0013-Renaming-host-names-to-mik-mak-muk.md)
-- [ADR 0014: Git Branching Strategy for Service Isolation](./adr/0014-git-branching-strategy.md)
-- [ADR 0015: Storing ssh keys unencrypted](./0015-storying-ssh-keys-unencrytpted.md)
+* [ADR 0001: Record Architecture Decisions](./adr/0001-record-architecture-decisions.md)
+* [ADR 0002: Storage Layout & NVMe Boot Strategy](./adr/0002-storage-layout-and-nvme-only-boot.md)
+* [ADR 0003: Under-Desk Sleeve Mounting](./adr/0003-physical-desk-sleeve-mounting.md)
+* [ADR 0004: Ansible Framework Choice](./adr/0004-ansible-for-declarative-agentless-automation.md)
+* [ADR 0005: Decoupling Base OS from Workloads](./adr/0005-separate-scope-for-base-os-and-workload-setup.md)
+* [ADR 0006: Standalone Reboot Operations](./adr/0006-standalone-reboot-operations.md)
+* [ADR 0007: CPU Undervolting & Microcode Lock Handling](./adr/0007-cpu-undervolting-strategy.md)
+* [ADR 0008: Disabling CPU Security Mitigations](./adr/0008-disabling-cpu-security-mitigations.md)
+* [ADR 0009: Requiring Password for Privilege Escalation](./adr/0009-requiring-password-for-privilege-escalation.md)
+* [ADR 0010: Removing Intel Undervolting and Thermald from Project
+  Configuration](./adr/0010-disabling-intel-undervolting-and-thermald.md)
+* [ADR 0011: Selection of CachyOS as the Host Operating
+  System](./adr/0011-Selection-of-CachyOS-as-the-host-operating-system.md)
+* [ADR 0012: Manual Boostrapping with Ventoy](./adr/0012-Manual-bootstrapping-with-Ventoy.md)
+* [ADR 0013: Renaming Hostnames to Mik, Mak, Muk](./adr/0013-Renaming-host-names-to-mik-mak-muk.md)
+* [ADR 0014: Git Branching Strategy for Service Isolation](./adr/0014-git-branching-strategy.md)
+* [ADR 0015: Storing ssh keys unencrypted](./0015-storying-ssh-keys-unencrytpted.md)
 
 ---
 
@@ -56,10 +61,10 @@ ansible-galaxy collection install community.general community.crypto ansible.pos
 
 1. Install minimal CachyOS via Ventoy USB on each host.
 2. Set static DHCP reservations and optionally DNS A records on your router:
-* **mik:** `192.168.105.2` (`mik.lab.local`)
-* **mak:** `192.168.105.3` (`mak.lab.local`)
-* **muk:** `192.168.105.4` (`muk.lab.local`)
 
+   * **mik:** `192.168.105.2` (`mik.lab.local`)
+   * **mak:** `192.168.105.3` (`mak.lab.local`)
+   * **muk:** `192.168.105.4` (`muk.lab.local`)
 
 3. Enable SSH daemon and configure local firewall access on each node:
 
@@ -74,18 +79,22 @@ sudo ufw reload
 
 ## Playbook Execution Sequence
 
-Management is split between **Control Node Key Management**, **Managed Node Provisioning**, and **Routine Cluster Operations**.
+Management is split between **Control Node Key Management**, **Managed Node Provisioning**, and **Routine Cluster
+Operations**.
 
 ### Privilege Escalation Rules (`-K` Option)
 
-* **Use `-K` (`--ask-become-pass`)**: ONLY when executing playbooks against managed nodes using an interactive user account that requires a password for `sudo` (such as `bootstrap_user: kruse` during node setup/teardown).
-* **DO NOT use `-K**`: When running tasks strictly on `localhost` (`controller-setup.yml` / `controller-teardown.yml`) or when operating via `ansible_management_user` (`myansibleuser`), which uses passwordless `sudo`.
+* **Use `-K` (`--ask-become-pass`)**: ONLY when executing playbooks against managed nodes using an interactive user
+  account that requires a password for `sudo` (such as `bootstrap_user: kruse` during node setup/teardown).
+* **DO NOT use `-K**`: When running tasks strictly on `localhost` (`controller-setup.yml` / `controller-teardown.yml`)
+  or when operating via `ansible_management_user` (`myansibleuser`), which uses passwordless `sudo`.
 
 ---
 
 ### Teardown Sequence (Idempotency & Decommission Test)
 
-Testing the full teardown sequence first verifies that all plays are fully idempotent and capable of cleaning up existing configurations without throwing errors:
+Testing the full teardown sequence first verifies that all plays are fully idempotent and capable of cleaning up
+existing configurations without throwing errors:
 
 ```bash
 # Step 1: Revert base system configurations
@@ -106,7 +115,8 @@ Testing the full teardown sequence first verifies that all plays are fully idemp
 
 ### Setup Sequence (Fresh Cluster Provisioning)
 
-Execute these steps in order to provision control keys, bootstrap management users on all nodes, and apply base OS tuning:
+Execute these steps in order to provision control keys, bootstrap management users on all nodes, and apply base OS
+tuning:
 
 ```bash
 # Step 1: Create dedicated SSH keypair on control node
@@ -160,47 +170,68 @@ ansible-playbook playbooks/benchmark-report.yml
 
 ## Architecture Rationale: Dedicated Automation Lifecycle
 
-Minimal base OS installs lack a standardized identity for background automation. Operating directly through personal user accounts for cluster tasks introduces security and reliability risks:
+Minimal base OS installs lack a standardized identity for background automation. Operating directly through personal
+user accounts for cluster tasks introduces security and reliability risks:
 
-* **Access Decoupling:** Personal SSH keys should never double as service credentials. Provisioning a dedicated keypair for `myansibleuser` isolates interactive admin access from continuous integration and automation.
-* **Scoped Escalation:** Interactive accounts remain protected by mandatory password checks for `sudo`. Giving `myansibleuser` explicit `NOPASSWD` rights enables non-interactive, unattended playbooks to complete without breaking system security for human operators.
-* **Ephemeral Footprint:** Decoupling setup into distinct key-creation (`controller-setup.yml`), node-bootstrap (`ansible-user-setup.yml`), and teardown playbooks allows management credentials to be provisioned on demand and purged completely whenever a node is decommissioned.
+* **Access Decoupling:** Personal SSH keys should never double as service credentials. Provisioning a dedicated keypair
+  for `myansibleuser` isolates interactive admin access from continuous integration and automation.
+* **Scoped Escalation:** Interactive accounts remain protected by mandatory password checks for `sudo`. Giving
+  `myansibleuser` explicit `NOPASSWD` rights enables non-interactive, unattended playbooks to complete without breaking
+  system security for human operators.
+* **Ephemeral Footprint:** Decoupling setup into distinct key-creation (`controller-setup.yml`), node-bootstrap
+  (`ansible-user-setup.yml`), and teardown playbooks allows management credentials to be provisioned on demand and
+  purged completely whenever a node is decommissioned.
 
 ---
 
 ## Applied Base OS Configurations
 
-* **SSH Key Deployment:** Provisions controller public keys into `authorized_keys` for `ansible_management_user` on target hosts ([OpenSSH Specification](https://www.openssh.com/manual.html)).
-* **Package & Keyring Maintenance:** Updates Arch and CachyOS keyrings, syncs system packages (`pacman -Syu`), and installs hardware drivers (`intel-media-driver`, `libva-intel-driver`, `mesa`) ([Arch Wiki: VA-API](https://wiki.archlinux.org/title/Hardware_video_acceleration)).
-* **Firewall Baseline:** Ensures standard UFW rules allow SSH access (`22/tcp`) on active interfaces ([Uncomplicated Firewall / Canonical](https://launchpad.net/ufw)).
+* **SSH Key Deployment:** Provisions controller public keys into `authorized_keys` for `ansible_management_user` on
+  target hosts ([OpenSSH Specification](https://www.openssh.com/manual.html)).
+* **Package & Keyring Maintenance:** Updates Arch and CachyOS keyrings, syncs system packages (`pacman -Syu`), and
+  installs hardware drivers (`intel-media-driver`, `libva-intel-driver`, `mesa`) ([Arch Wiki:
+  VA-API](https://wiki.archlinux.org/title/Hardware_video_acceleration)).
+* **Firewall Baseline:** Ensures standard UFW rules allow SSH access (`22/tcp`) on active interfaces ([Uncomplicated
+  Firewall / Canonical](https://launchpad.net/ufw)).
 * **Kernel Parameters (`/etc/cmdline.d/homelab-tuning.conf`):**
-* `mitigations=off`: Disables CPU speculative execution side-channel mitigations for maximum Coffee Lake performance ([Linux Kernel Documentation: Spectre/Meltdown Mitigations](https://www.kernel.org/doc/html/latest/admin-guide/hw-vuln/spectre.html)).
-* `i915.enable_guc=3`: Enables GuC (Graphics Microcontroller) and HuC (HEVC/H265 microcontroller) firmware for hardware video decoding and offloaded GPU scheduling ([Linux Kernel i915 Graphics Driver Docs](https://www.google.com/search?q=https://www.kernel.org/doc/html/latest/gpu/i915.html)).
-* `i915.enable_fbc=1`: Enables Frame Buffer Compression to save memory bandwidth and reduce power draw ([Intel Graphics Documentation](https://www.google.com/search?q=https://01.org/linuxgraphics)).
-* `intel_pstate=active`: Sets the active CPU performance scaling driver ([Linux Kernel CPU Performance Scaling Docs](https://www.google.com/search?q=https://www.kernel.org/doc/html/latest/admin-guide/pm/intel-pstate.html)).
-* `nvme_core.default_ps_max_latency_us=0`: Disables deep NVMe power-saving states to eliminate storage I/O latency and PCI bus disconnects ([Linux Kernel NVMe Driver Parameters](https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html)).
+* `mitigations=off`: Disables CPU speculative execution side-channel mitigations for maximum Coffee Lake performance
+  ([Linux Kernel Documentation: Spectre/Meltdown
+  Mitigations](https://www.kernel.org/doc/html/latest/admin-guide/hw-vuln/spectre.html)).
+* `i915.enable_guc=3`: Enables GuC (Graphics Microcontroller) and HuC (HEVC/H265 microcontroller) firmware for hardware
+  video decoding and offloaded GPU scheduling ([Linux Kernel i915 Graphics Driver
+  Docs](https://www.google.com/search?q=https://www.kernel.org/doc/html/latest/gpu/i915.html)).
+* `i915.enable_fbc=1`: Enables Frame Buffer Compression to save memory bandwidth and reduce power draw ([Intel Graphics
+  Documentation](https://www.google.com/search?q=https://01.org/linuxgraphics)).
+* `intel_pstate=active`: Sets the active CPU performance scaling driver ([Linux Kernel CPU Performance Scaling
+  Docs](https://www.google.com/search?q=https://www.kernel.org/doc/html/latest/admin-guide/pm/intel-pstate.html)).
+* `nvme_core.default_ps_max_latency_us=0`: Disables deep NVMe power-saving states to eliminate storage I/O latency and
+  PCI bus disconnects ([Linux Kernel NVMe Driver
+  Parameters](https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html)).
 
-
-* **GPU Module:** Loads the `i915` kernel module on boot ([Arch Wiki: Kernel Modules](https://wiki.archlinux.org/title/Kernel_module)).
-* **Disabled Undervolting:** Deploys `templates/intel-undervolt.conf.j2` with `enable false` and ensures `intel-undervolt.service` is stopped to prevent systemd service failures caused by HP BIOS microcode locks ([Intel Plundervolt Vulnerability / INTEL-SA-00289](https://www.intel.com/content/www/us/en/security-center/advisory/intel-sa-00289.html)).
+* **GPU Module:** Loads the `i915` kernel module on boot ([Arch Wiki: Kernel
+  Modules](https://wiki.archlinux.org/title/Kernel_module)).
+* **Disabled Undervolting:** Deploys `templates/intel-undervolt.conf.j2` with `enable false` and ensures
+  `intel-undervolt.service` is stopped to prevent systemd service failures caused by HP BIOS microcode locks ([Intel
+  Plundervolt Vulnerability /
+  INTEL-SA-00289](https://www.intel.com/content/www/us/en/security-center/advisory/intel-sa-00289.html)).
 
 ---
 
 ## Troubleshooting: PAM Lockouts
 
-CachyOS enforces strict authentication limits via `pam_faillock`. Rapid connection attempts or password mismatches will temporarily lock accounts out of `sudo` privilege escalation, even while SSH key logins continue to work.
+CachyOS enforces strict authentication limits via `pam_faillock`. Rapid connection attempts or password mismatches will
+temporarily lock accounts out of `sudo` privilege escalation, even while SSH key logins continue to work.
 
 1. **Diagnosing Lockouts**
-```bash
-sudo faillock
-sudo faillock --user kruse
 
-```
-
+   ```bash
+   sudo faillock
+   sudo faillock --user kruse
+   ```
 
 2. **Clearing Lockouts**
-```bash
-sudo faillock --reset
-sudo faillock --user kruse --reset
 
-```
+   ```bash
+   sudo faillock --reset
+   sudo faillock --user kruse --reset
+   ```

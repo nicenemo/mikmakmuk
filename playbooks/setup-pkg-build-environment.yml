@@ -8,7 +8,9 @@
   vars:
     project_root: "{{ playbook_dir if not playbook_dir.endswith('playbooks') else playbook_dir ~ '/..' }}"
     # Fetches elk_version from inventory.yml (defaults to 9.5.3 if undefined)
-    target_version: "{{ hostvars[groups['cluster_nodes'][0]]['elk_version'] if (groups['cluster_nodes'] is defined and hostvars[groups['cluster_nodes'][0]]['elk_version'] is defined) else '9.5.3' }}"
+    target_version: >-
+      {{ hostvars[groups['cluster_nodes'][0]]['elk_version'] if (groups['cluster_nodes'] is defined and
+      hostvars[groups['cluster_nodes'][0]]['elk_version'] is defined) else '9.5.3' }}
     build_user: "{{ ansible_env.SUDO_USER | default(lookup('env', 'USER')) }}"
 
   tasks:

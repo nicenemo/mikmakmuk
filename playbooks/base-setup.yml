@@ -67,7 +67,7 @@
         state: directory
         owner: root
         group: root
-        mode: "0755"
+        mode: '0755'
 
     - name: Deploy iGPU DRI & OpenCL environment drop-in
       ansible.builtin.copy:
@@ -75,4 +75,4 @@
         dest: /etc/environment.d/99-homelab-igpu-dri.conf
         owner: root
         group: root
-        mode: "0644"
+        mode: '0644'

@@ -1,6 +1,6 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: "Cluster Storage TRIM Teardown & Restore Original Timer State"
+- name: 'Cluster Storage TRIM Teardown & Restore Original Timer State'
   hosts: cluster_nodes
   become: true
   vars:

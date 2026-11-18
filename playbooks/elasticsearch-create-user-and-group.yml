@@ -14,7 +14,7 @@
       when: "'elasticsearch_node' not in (cluster_roles | default([]))"
     - name: Check if Elasticsearch is already installed on host
       ansible.builtin.command:
-        cmd: "pacman -Q elasticsearch"
+        cmd: 'pacman -Q elasticsearch'
       register: pacman_check
       failed_when: false
       changed_when: false

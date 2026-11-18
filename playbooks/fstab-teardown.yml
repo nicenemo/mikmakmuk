@@ -1,12 +1,12 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: "Revert Btrfs Mount Tuning in /etc/fstab (CachyOS)"
+- name: 'Revert Btrfs Mount Tuning in /etc/fstab (CachyOS)'
   hosts: cluster_nodes
   become: true
   vars:
     # Used only when fstab-setup.yml never recorded the original options:
     # the CachyOS installer default for the root subvolume.
-    fallback_root_opts: "subvol=/@,defaults,noatime,compress=zstd:1"
+    fallback_root_opts: 'subvol=/@,defaults,noatime,compress=zstd:1'
     restore_root_opts: "{{ ansible_local['mikmakmuk_fstab']['root_opts'] | default(fallback_root_opts) }}"
 
   tasks:
@@ -36,13 +36,13 @@
     # 3. Validation & State Cleanup
     # -------------------------------------------------------------------------
     - name: Verify /etc/fstab syntax with findmnt
-      ansible.builtin.command: "findmnt --verify --verbose"
+      ansible.builtin.command: 'findmnt --verify --verbose'
       changed_when: false
 
     - name: Refresh mount facts
       ansible.builtin.setup:
         gather_subset:
-          - "!all"
+          - '!all'
           - mounts
 
     - name: Display reverted mount configuration
