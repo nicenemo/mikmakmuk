@@ -1,0 +1,9 @@
+---
+# Ansible collections the playbooks use besides ansible.builtin. ansible-core alone does not ship them
+# (on Arch the `ansible` package does). Install them into the project with:
+#   ansible-galaxy collection install -r requirements.yml -p .ansible/collections
+# ansible.cfg looks there first; .ansible/ is git-ignored.
+collections:
+  - name: community.general
+  - name: ansible.posix
+  - name: community.crypto

@@ -5,6 +5,10 @@
 # `main` (ADR 0014, ADR 0017).
 # Packages (PlatformIO, JDK 27, Node, BPF tools, Claude Code), JBang, the udev rules for the boards and the udev-started
 # HID-BPF loader. The loader jar is built in the nachtgespenst repository; without it the unit stays inert.
+# Run it on mik itself, without the ansible SSH key (the sudo password is asked once):
+#   ansible-galaxy collection install -r requirements.yml -p .ansible/collections    # once, see requirements.yml
+#   ansible-playbook playbooks/nachtgespenst-setup.yml --limit mik -c local -K
+# Dry run without root: add `-e ansible_become=false --check --diff` and drop -K.
 - name: Set up the Nachtgespenst Development Environment on mik
   hosts: nachtgespenst
   become: true
