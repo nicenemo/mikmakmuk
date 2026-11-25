@@ -11,7 +11,7 @@ fi
 # Scan only what the remote does not have yet; on the first push scan everything.
 if git rev-parse --verify --quiet "@{upstream}" >/dev/null; then
     base="$(git rev-parse "@{upstream}")"
-    trufflehog git "file://$PWD" --since-commit "$base" --branch HEAD --results=verified,unknown,unverified --fail >/dev/null
+    trufflehog git "file://$PWD" --no-update --since-commit "$base" --branch HEAD --results=verified,unknown,unverified --fail >/dev/null
 else
-    trufflehog git "file://$PWD" --results=verified,unknown,unverified --fail >/dev/null
+    trufflehog git "file://$PWD" --no-update --results=verified,unknown,unverified --fail >/dev/null
 fi
