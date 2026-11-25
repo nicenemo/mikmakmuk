@@ -1,0 +1,5 @@
+# Nachtgespenst (M5Stack Core2/CoreS3 macro pad): open exactly the /dev/input/eventN nodes of its HID device to the logged-in user.
+# SerialTest (nachtgespenst) grabs the keyboard of the board so that the keys of its tests do not reach the desktop, and it reads the
+# host LEDs from the same node. Bus 0003 = USB, 0005 = Bluetooth; 1209:0001 is the pid.codes test ID of the firmware (ADR 0015 of nachtgespenst).
+# Same match as 70-nachtgespenst-hidraw.rules: the HID device is the parent of the input device, so only the board's nodes get the ACL.
+SUBSYSTEM=="input", KERNEL=="event[0-9]*", KERNELS=="000[35]:1209:0001.*", TAG+="uaccess"

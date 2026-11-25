@@ -37,6 +37,7 @@
         - /etc/udev/rules.d/99-nachtgespenst-esp32.rules
         - /etc/udev/rules.d/70-nachtgespenst-hidraw.rules
         - /etc/udev/rules.d/71-nachtgespenst-hid-bpf.rules
+        - /etc/udev/rules.d/72-nachtgespenst-input.rules
         - /etc/systemd/system/nachtgespenst-hid-bpf@.service
         - /opt/nachtgespenst-hid-bpf
         - /sys/fs/bpf/nachtgespenst

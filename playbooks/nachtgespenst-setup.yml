@@ -24,6 +24,9 @@
       # Start the HID-BPF loader when the board appears
       - src: 71-nachtgespenst-hid-bpf.rules
         dest: 71-nachtgespenst-hid-bpf.rules
+      # /dev/input/eventN of the board for the logged-in user (SerialTest grabs its keyboard and reads the host LEDs)
+      - src: 72-nachtgespenst-input.rules
+        dest: 72-nachtgespenst-input.rules
 
   tasks:
     # -------------------------------------------------------------------------
@@ -177,4 +180,5 @@
     - name: Apply udev rules to present devices
       ansible.builtin.command: >-
         udevadm trigger --subsystem-match=tty --subsystem-match=hidraw --subsystem-match=usb --subsystem-match=hid
+        --subsystem-match=input
       changed_when: true
