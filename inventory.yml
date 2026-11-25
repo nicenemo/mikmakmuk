@@ -95,8 +95,10 @@ all:
           - socat
           - gitleaks
           - claude-code
+        # trufflehog is what the pre-push hook of the repositories calls: the release binary of this version is
+        # installed (checksum from the release), unless the AUR package trufflehog-bin is installed already.
+        trufflehog_version: 3.100.0
         # AUR packages: not installable by the pacman module. They are only checked, never built here.
-        # zoom is installed on mik already; trufflehog-bin is what the pre-push hook of the repositories calls.
+        # zoom is installed on mik already.
         nachtgespenst_aur_packages:
           - zoom
-          - trufflehog-bin

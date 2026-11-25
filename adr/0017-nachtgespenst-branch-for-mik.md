@@ -26,9 +26,11 @@ A branch `nachtgespenst`, rebased onto `main` like the `env_*` branches, holds:
 
 Setup installs the packages of the group variable `nachtgespenst_packages` (PlatformIO, esptool, JDK 27 from
 `jdk-openjdk`, Node, the BPF tools, `claude-code` with its sandbox tools) and JBang, and records what it installed
-itself in `/etc/ansible/facts.d/mikmakmuk_nachtgespenst.fact`, so teardown removes only that. AUR packages (`zoom`,
-`trufflehog-bin`) cannot be installed by the pacman module: setup only reports those that are missing and teardown never
-removes them. `zoom` is installed on `mik` already and stays.
+itself in `/etc/ansible/facts.d/mikmakmuk_nachtgespenst.fact`, so teardown removes only that. `trufflehog` (the
+pre-push hook of the repositories) is not in the repositories: setup installs the release binary of the pinned
+`trufflehog_version` with the checksum of the release into `/opt/trufflehog`, unless the AUR package `trufflehog-bin`
+is installed. AUR packages (`zoom`) cannot be installed by the pacman module: setup only reports those that are
+missing and teardown never removes them. `zoom` is installed on `mik` already and stays.
 
 ## Consequences
 

@@ -13,6 +13,7 @@
     hid_bpf_dir: /opt/nachtgespenst-hid-bpf
     # Set to the built loader.jar to install it: -e hid_bpf_loader_jar=/path/to/loader.jar
     hid_bpf_loader_jar: ""
+    trufflehog_release_url: "https://github.com/trufflesecurity/trufflehog/releases/download/v{{ trufflehog_version }}"
     udev_rules:
       # Serial adapters (CP210x, CH9102, CH340) and Espressif native USB, group uucp
       - src: 99-nachtgespenst-esp32-serial.rules
@@ -75,6 +76,43 @@
         src: "{{ jbang_install_dir }}/bin/jbang"
         dest: /usr/local/bin/jbang
         state: link
+
+    # -------------------------------------------------------------------------
+    # 2b. trufflehog (pre-push hook of the repositories; the release binary, as the AUR package trufflehog-bin is)
+    # -------------------------------------------------------------------------
+    - name: Download the trufflehog release
+      ansible.builtin.get_url:
+        url: "{{ trufflehog_release_url }}/trufflehog_{{ trufflehog_version }}_linux_amd64.tar.gz"
+        checksum: "sha256:{{ trufflehog_release_url }}/trufflehog_{{ trufflehog_version }}_checksums.txt"
+        dest: "/var/cache/trufflehog-{{ trufflehog_version }}.tar.gz"
+        mode: "0644"
+      when: "'trufflehog-bin' not in ansible_facts['packages']"
+
+    - name: Create the trufflehog directory of this version
+      ansible.builtin.file:
+        path: "/opt/trufflehog/{{ trufflehog_version }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: "'trufflehog-bin' not in ansible_facts['packages']"
+
+    - name: Unpack trufflehog
+      ansible.builtin.unarchive:
+        src: "/var/cache/trufflehog-{{ trufflehog_version }}.tar.gz"
+        dest: "/opt/trufflehog/{{ trufflehog_version }}"
+        remote_src: true
+        include:
+          - trufflehog
+        creates: "/opt/trufflehog/{{ trufflehog_version }}/trufflehog"
+      when: "'trufflehog-bin' not in ansible_facts['packages']"
+
+    - name: Link trufflehog into /usr/local/bin
+      ansible.builtin.file:
+        src: "/opt/trufflehog/{{ trufflehog_version }}/trufflehog"
+        dest: /usr/local/bin/trufflehog
+        state: link
+      when: "'trufflehog-bin' not in ansible_facts['packages']"
 
     # -------------------------------------------------------------------------
     # 3. Serial ports and udev rules for the boards

@@ -56,6 +56,15 @@
         - "{{ jbang_install_dir }}"
         - /var/cache/jbang.zip
 
+    - name: Remove the trufflehog release binary (the AUR package trufflehog-bin is never touched)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/local/bin/trufflehog
+        - /opt/trufflehog
+        - "/var/cache/trufflehog-{{ trufflehog_version }}.tar.gz"
+
     - name: Look up the uucp group
       ansible.builtin.getent:
         database: group
