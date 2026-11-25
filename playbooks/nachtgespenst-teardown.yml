@@ -1,0 +1,89 @@
+#!/usr/bin/env ansible-playbook
+---
+# Reverts nachtgespenst-setup.yml on mik: the loader instances (this detaches the BPF programs), the udev rules,
+# the unit, JBang and the packages that setup installed itself. Zoom and the other AUR packages are never touched.
+- name: Remove the Nachtgespenst Development Environment from mik
+  hosts: nachtgespenst
+  become: true
+  vars:
+    # Recorded by nachtgespenst-setup.yml; without the record nothing is removed.
+    nachtgespenst_installed_packages: >-
+      {{ ansible_local['mikmakmuk_nachtgespenst']['installed_packages'] | default([]) }}
+    # Needed by the rest of the system or by the baseline; never removed even if setup installed them.
+    protected_packages:
+      - python
+      - git
+      - base-devel
+      - jq
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. The loader (stopping the instances detaches the programs from the kernel)
+    # -------------------------------------------------------------------------
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Stop the loader instances
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+      loop: "{{ ansible_facts['services'].keys() | select('match', '^nachtgespenst-hid-bpf@.+[.]service$') | list }}"
+
+    - name: Remove the udev rules, the unit and the loader directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/udev/rules.d/99-nachtgespenst-esp32.rules
+        - /etc/udev/rules.d/70-nachtgespenst-hidraw.rules
+        - /etc/udev/rules.d/71-nachtgespenst-hid-bpf.rules
+        - /etc/systemd/system/nachtgespenst-hid-bpf@.service
+        - /opt/nachtgespenst-hid-bpf
+        - /sys/fs/bpf/nachtgespenst
+      notify:
+        - Reload systemd
+        - Reload udev
+
+    # -------------------------------------------------------------------------
+    # 2. JBang, the serial group and the packages
+    # -------------------------------------------------------------------------
+    - name: Remove JBang
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/local/bin/jbang
+        - "{{ jbang_install_dir }}"
+        - /var/cache/jbang.zip
+
+    - name: Look up the uucp group
+      ansible.builtin.getent:
+        database: group
+        key: uucp
+
+    - name: Remove the target user from uucp
+      ansible.builtin.command:
+        cmd: "gpasswd -d {{ target_user }} uucp"
+      changed_when: true
+      when: target_user in (getent_group['uucp'][2] | split(','))
+
+    - name: Remove the packages that setup installed
+      community.general.pacman:
+        name: "{{ nachtgespenst_installed_packages | difference(protected_packages) }}"
+        state: absent
+        extra_args: --unneeded
+      when: nachtgespenst_installed_packages | difference(protected_packages) | length > 0
+
+    - name: Remove the recorded state
+      ansible.builtin.file:
+        path: /etc/ansible/facts.d/mikmakmuk_nachtgespenst.fact
+        state: absent
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Reload udev
+      ansible.builtin.command: udevadm control --reload-rules
+      changed_when: true

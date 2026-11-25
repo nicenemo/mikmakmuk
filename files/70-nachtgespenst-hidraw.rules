@@ -1,0 +1,3 @@
+# Nachtgespenst (M5Stack Core2/CoreS3 macro pad): open exactly its /dev/hidrawN nodes to the logged-in user.
+# Bus 0003 = USB, 0005 = Bluetooth; 1209:0001 is the pid.codes test ID of the firmware (ADR 0015 of nachtgespenst).
+SUBSYSTEM=="hidraw", KERNELS=="000[35]:1209:0001.*", TAG+="uaccess"

@@ -1,0 +1,6 @@
+# USB serial adapters and native USB of the M5Stack Core2 (CP210x / CH9102) and CoreS3 / ESP32-S3 (Espressif)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE="0660", GROUP="uucp", TAG+="uaccess"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", MODE="0660", GROUP="uucp", TAG+="uaccess"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE="0660", GROUP="uucp", TAG+="uaccess"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0660", GROUP="uucp", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="303a", MODE="0660", GROUP="uucp", TAG+="uaccess"

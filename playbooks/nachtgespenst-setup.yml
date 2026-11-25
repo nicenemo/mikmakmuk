@@ -1,0 +1,142 @@
+#!/usr/bin/env ansible-playbook
+---
+# Build, flash and test environment for the Nachtgespenst macro pad (https://github.com/nicenemo/nachtgespenst) on
+# mik only (group `nachtgespenst`; mak and muk are skipped). Branch `nachtgespenst`, not part of the baseline on
+# `main` (ADR 0014, ADR 0017).
+# Packages (PlatformIO, JDK 27, Node, BPF tools, Claude Code), JBang, the udev rules for the boards and the udev-started
+# HID-BPF loader. The loader jar is built in the nachtgespenst repository; without it the unit stays inert.
+- name: Set up the Nachtgespenst Development Environment on mik
+  hosts: nachtgespenst
+  become: true
+  vars:
+    project_root: "{{ playbook_dir | dirname }}"
+    hid_bpf_dir: /opt/nachtgespenst-hid-bpf
+    # Set to the built loader.jar to install it: -e hid_bpf_loader_jar=/path/to/loader.jar
+    hid_bpf_loader_jar: ""
+    udev_rules:
+      # Serial adapters (CP210x, CH9102, CH340) and Espressif native USB, group uucp
+      - src: 99-nachtgespenst-esp32-serial.rules
+        dest: 99-nachtgespenst-esp32.rules
+      # hidraw access for the macro pad (USB and Bluetooth, ID 1209:0001)
+      - src: 70-nachtgespenst-hidraw.rules
+        dest: 70-nachtgespenst-hidraw.rules
+      # Start the HID-BPF loader when the board appears
+      - src: 71-nachtgespenst-hid-bpf.rules
+        dest: 71-nachtgespenst-hid-bpf.rules
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # 1. Packages (only what setup installs is recorded, so teardown keeps what was there before)
+    # -------------------------------------------------------------------------
+    - name: Gather installed package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Record packages installed by setup
+      ansible.builtin.import_tasks: tasks/save-local-state.yml
+      vars:
+        local_state_name: nachtgespenst
+        local_state_force: true
+        local_state:
+          installed_packages: >-
+            {{ ((ansible_local['mikmakmuk_nachtgespenst']['installed_packages'] | default([]))
+                + (nachtgespenst_packages | difference(ansible_facts['packages'] | list)))
+                | unique | sort }}
+
+    - name: Install the development packages
+      community.general.pacman:
+        name: "{{ nachtgespenst_packages }}"
+        state: present
+
+    # AUR packages cannot be built by this playbook: say which ones are missing and carry on.
+    - name: Report AUR packages that are not installed
+      ansible.builtin.debug:
+        msg: "AUR package {{ item }} is not installed on {{ inventory_hostname }}; install it with an AUR helper"
+      loop: "{{ nachtgespenst_aur_packages | difference(ansible_facts['packages'] | list) }}"
+
+    # -------------------------------------------------------------------------
+    # 2. JBang (system-wide; it downloads the JDKs that the launchers ask for)
+    # -------------------------------------------------------------------------
+    - name: Download JBang
+      ansible.builtin.get_url:
+        url: https://github.com/jbangdev/jbang/releases/latest/download/jbang.zip
+        dest: /var/cache/jbang.zip
+        mode: "0644"
+
+    - name: Unpack JBang
+      ansible.builtin.unarchive:
+        src: /var/cache/jbang.zip
+        dest: /opt
+        remote_src: true
+        creates: "{{ jbang_install_dir }}/bin/jbang"
+
+    - name: Link jbang into /usr/local/bin
+      ansible.builtin.file:
+        src: "{{ jbang_install_dir }}/bin/jbang"
+        dest: /usr/local/bin/jbang
+        state: link
+
+    # -------------------------------------------------------------------------
+    # 3. Serial ports and udev rules for the boards
+    # -------------------------------------------------------------------------
+    - name: Add the target user to uucp (serial ports)
+      ansible.builtin.user:
+        name: "{{ target_user }}"
+        groups: uucp
+        append: true
+
+    - name: Install the udev rule files
+      ansible.builtin.copy:
+        src: "{{ project_root }}/files/{{ item.src }}"
+        dest: "/etc/udev/rules.d/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ udev_rules }}"
+      loop_control:
+        label: "{{ item.dest }}"
+      notify: Reload udev
+
+    # -------------------------------------------------------------------------
+    # 4. The HID-BPF loader (owned by root: whoever can change the jar can load kernel code)
+    # -------------------------------------------------------------------------
+    - name: Create the loader directory
+      ansible.builtin.file:
+        path: "{{ hid_bpf_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install the loader jar when one is given
+      ansible.builtin.copy:
+        src: "{{ hid_bpf_loader_jar }}"
+        dest: "{{ hid_bpf_dir }}/loader.jar"
+        owner: root
+        group: root
+        mode: "0644"
+      when: hid_bpf_loader_jar | length > 0
+
+    - name: Install the systemd unit of the loader
+      ansible.builtin.copy:
+        src: "{{ project_root }}/files/nachtgespenst-hid-bpf@.service"
+        dest: /etc/systemd/system/nachtgespenst-hid-bpf@.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Reload udev
+      ansible.builtin.command: udevadm control --reload-rules
+      changed_when: true
+      notify: Apply udev rules to present devices
+
+    - name: Apply udev rules to present devices
+      ansible.builtin.command: >-
+        udevadm trigger --subsystem-match=tty --subsystem-match=hidraw --subsystem-match=usb --subsystem-match=hid
+      changed_when: true

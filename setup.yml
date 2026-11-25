@@ -18,3 +18,7 @@
 
 - name: Import Network Setup Playbook
   ansible.builtin.import_playbook: playbooks/network-setup.yml
+
+# Branch nachtgespenst: build, flash and test environment of the Nachtgespenst macro pad, mik only (ADR 0017)
+- name: Import Nachtgespenst Setup Playbook
+  ansible.builtin.import_playbook: playbooks/nachtgespenst-setup.yml

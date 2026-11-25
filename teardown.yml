@@ -4,6 +4,10 @@
 # Master Homelab Teardown Orchestrator
 # =============================================================================
 
+# Branch nachtgespenst: first in, last out (ADR 0017)
+- name: Import Nachtgespenst Teardown Playbook
+  ansible.builtin.import_playbook: playbooks/nachtgespenst-teardown.yml
+
 - name: Import Network Teardown Playbook
   ansible.builtin.import_playbook: playbooks/network-teardown.yml
 

@@ -38,22 +38,65 @@ all:
             - tree
             - tmux
 
-        mak:
-          ansible_host: 192.168.105.3
-          ram_gb: 64
-          cpu_type: 8500T
-          cluster_ip: 192.168.107.3
-          btrfs_mount_opts: "noatime,compress=zstd:1,commit=15,space_cache=v2"
-          node_packages:
-            - htop
-            - ncdu
+        # mak and muk are switched off on this branch (only mik is powered on for the Nachtgespenst work).
+        # Remove the comment marks to bring them back.
+        # mak:
+        #   ansible_host: 192.168.105.3
+        #   ram_gb: 64
+        #   cpu_type: 8500T
+        #   cluster_ip: 192.168.107.3
+        #   btrfs_mount_opts: "noatime,compress=zstd:1,commit=15,space_cache=v2"
+        #   node_packages:
+        #     - htop
+        #     - ncdu
+        #
+        # muk:
+        #   ansible_host: 192.168.105.4
+        #   ram_gb: 64
+        #   cpu_type: 8500T
+        #   cluster_ip: 192.168.107.4
+        #   btrfs_mount_opts: "noatime,compress=zstd:3,space_cache=v2"
+        #   node_packages:
+        #     - iotop
+        #     - duf
 
-        muk:
-          ansible_host: 192.168.105.4
-          ram_gb: 64
-          cpu_type: 8500T
-          cluster_ip: 192.168.107.4
-          btrfs_mount_opts: "noatime,compress=zstd:3,space_cache=v2"
-          node_packages:
-            - iotop
-            - duf
+    # Only mik builds, flashes and tests the Nachtgespenst macro pad (playbooks/nachtgespenst-setup.yml).
+    # mak and muk are not members of this group: its play skips them.
+    nachtgespenst:
+      hosts:
+        mik:
+      vars:
+        target_user: kruse
+        jbang_install_dir: /opt/jbang
+        # Repository and CachyOS packages for building the firmware (PlatformIO), the Java tools (JDK 27, JBang),
+        # the site (Node), the BPF loader (clang, llvm, libbpf, bpf) and for working with Claude Code
+        # (bubblewrap and socat are the tools of its sandbox).
+        nachtgespenst_packages:
+          - python
+          - python-pip
+          - platformio-core
+          - platformio-core-udev
+          - esptool
+          - cmake
+          - ninja
+          - unzip
+          - git
+          - base-devel
+          - jq
+          - jdk-openjdk
+          - nodejs
+          - npm
+          - v4l-utils
+          - clang
+          - llvm
+          - libbpf
+          - bpf
+          - bubblewrap
+          - socat
+          - gitleaks
+          - claude-code
+        # AUR packages: not installable by the pacman module. They are only checked, never built here.
+        # zoom is installed on mik already; trufflehog-bin is what the pre-push hook of the repositories calls.
+        nachtgespenst_aur_packages:
+          - zoom
+          - trufflehog-bin

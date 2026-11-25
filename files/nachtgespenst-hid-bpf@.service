@@ -1,0 +1,29 @@
+# Loads the HID-BPF program of the Nachtgespenst pad for one HID device (the instance name is the kernel name, for example 0003:1209:0001.000A).
+# Started by files/71-nachtgespenst-hid-bpf.rules. The loader attaches the program, pins its link under /sys/fs/bpf/nachtgespenst and exits;
+# the program stays in the kernel until ExecStop detaches it (ADR 0016).
+[Unit]
+Description=Nachtgespenst HID-BPF program for %i
+Documentation=https://github.com/nicenemo/nachtgespenst
+# Nothing happens until the loader is installed: no failing unit at every hotplug.
+ConditionPathExists=/opt/nachtgespenst-hid-bpf/loader.jar
+Wants=sys-fs-bpf.mount
+After=sys-fs-bpf.mount
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# A dynamic user with exactly the capabilities that loading a HID-BPF struct_ops program needs, nothing else.
+DynamicUser=yes
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_ADMIN
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_ADMIN
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+# The pin directory belongs to root: the plus sign runs this one command without the restrictions above.
+ExecStartPre=+/usr/bin/install -d -m 0755 /sys/fs/bpf/nachtgespenst
+ExecStart=/usr/bin/java --enable-native-access=ALL-UNNAMED -jar /opt/nachtgespenst-hid-bpf/loader.jar attach %i
+ExecStop=/usr/bin/java --enable-native-access=ALL-UNNAMED -jar /opt/nachtgespenst-hid-bpf/loader.jar detach %i

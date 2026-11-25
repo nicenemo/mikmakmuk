@@ -1,0 +1,4 @@
+# Nachtgespenst (M5Stack Core2/CoreS3 macro pad), USB and Bluetooth: start the HID-BPF loader for the HID device of the board when it appears.
+# The kernel name of the HID device (0003:1209:0001.000A) ends in the hid_id the program attaches to; the board gets a new one after every
+# flash and replug, so the rule runs the loader again each time (ADR 0016).
+ACTION=="add", SUBSYSTEM=="hid", KERNEL=="000[35]:1209:0001.*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="nachtgespenst-hid-bpf@%k.service"
